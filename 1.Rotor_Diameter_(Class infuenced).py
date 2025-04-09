@@ -10,18 +10,20 @@ from pathlib import Path
 # Define the base directory as the directory containing this script.
 base_dir = Path(__file__).resolve().parent
 
-# Create a directory path for the data folder (make sure your repo includes a folder named 'data')
+# Define the data directory (for input files) and the results directory (for output files).
 data_dir = base_dir / "data"
+results_dir = base_dir / "results"
+results_dir.mkdir(exist_ok=True)  # Create results folder if it does not exist.
 
 # Define the input and output file names.
-input_file = "Windfarms_World_20230530.xlsx"  # main Excel file
-output_file = "Windfarms_World_20230530_final_1.xlsx"  # final output file
+input_file = "Windfarms_World_20230530.xlsx"   # Main Excel file (should be in the data folder)
+output_file = "Windfarms_World_20230530_final_1.xlsx"  # Final output file to save in the results folder
 
-# Construct full paths using the relative data directory.
+# Construct full paths using the relative directories.
 full_input_path = data_dir / input_file
-full_output_path = data_dir / output_file
+full_output_path = results_dir / output_file
 
-# Define the TIFF file path (assumed to be in the 'data' folder too).
+# Define the TIFF file path (assumed to be in the data folder).
 tif_file = "gwa3_250_windspeed_100m.tif"  # IEC classification TIFF
 tif_path = data_dir / tif_file
 
@@ -35,19 +37,18 @@ df.columns = [
     "Commissioning date", "Status", "Decommissioning date", "Link", "Update"
 ]
 
-# Filter for onshore turbines in Europe
+# Filter for onshore turbines in Europe.
 df["Offshore"] = df["Offshore"].astype(str).str.strip().str.lower()
 df = df[df["Offshore"] == "no"].copy()
 df["Continent"] = df["Continent"].astype(str).str.strip().str.lower()
 df = df[df["Continent"] == "europe"].copy()
 
-# Convert coordinates to numeric; drop rows with invalid entries
+# Convert coordinates to numeric; drop rows with invalid entries.
 df["Latitude"] = pd.to_numeric(df["Latitude"], errors="coerce")
 df["Longitude"] = pd.to_numeric(df["Longitude"], errors="coerce")
 df = df.dropna(subset=["Latitude", "Longitude"]).copy()
 
-
-# Extract Rotor Diameter based on patters per manufacturer
+# Extract Rotor Diameter based on patterns per manufacturer.
 def extract_rotor_diameter(turbine_str, manufacturer):
     if not isinstance(turbine_str, str):
         return None
@@ -99,20 +100,17 @@ def extract_rotor_diameter(turbine_str, manufacturer):
 
     return None
 
-
 df["Rotor Diameter"] = df.apply(lambda row: extract_rotor_diameter(row["Turbine"], row["Manufacturer"]), axis=1)
 missing_pct = df["Rotor Diameter"].isna().mean() * 100
 print(f"Percentage of missing values in Rotor Diameter (onshore, Europe): {missing_pct:.2f}%")
 
-
-# Compute Single WT Capacity
+# Compute Single WT Capacity.
 df["Total power"] = pd.to_numeric(df["Total power"], errors='coerce')
 df["Number of turbines"] = pd.to_numeric(df["Number of turbines"], errors='coerce')
 df = df.dropna(subset=["Total power", "Number of turbines"]).copy()
 df["SingleWT_Capacity"] = df["Total power"] / df["Number of turbines"]
 
-
-# Add IEC Classification from TIFF File
+# Add IEC Classification from TIFF File.
 iec_mapping = {
     0: "1A+",
     1: "1A",
@@ -135,7 +133,7 @@ def extract_numeric_class(iec_class):
     else:
         return np.nan
 
-# Prepare coordinates for raster sampling (rasterio expects (lon, lat))
+# Prepare coordinates for raster sampling (rasterio expects (lon, lat)).
 coords = list(zip(df["Longitude"], df["Latitude"]))
 with rasterio.open(tif_path) as src:
     print("Raster CRS:", src.crs)
@@ -155,12 +153,11 @@ df["IEC_Class"] = iec_classifications
 df["IEC_Class_Num"] = [extract_numeric_class(cl) if cl is not None else np.nan for cl in iec_classifications]
 df["IEC_Class_Group"] = df["IEC_Class_Num"].apply(lambda x: f"Class {int(x)}" if not np.isnan(x) else "S")
 
-
-# Per-Class Log–Log Regression
+# Per-Class Log–Log Regression.
 df_reg = df.dropna(subset=["Rotor Diameter", "SingleWT_Capacity"]).copy()
 df_reg = df_reg[df_reg["SingleWT_Capacity"] > 0]
 
-# Define overall x-range to extend all regression lines equally
+# Define overall x-range to extend all regression lines equally.
 overall_x_min = df_reg["SingleWT_Capacity"].min()
 overall_x_max = df_reg["SingleWT_Capacity"].max()
 
@@ -176,19 +173,19 @@ for grp in groups:
     if len(X) < 2:
         print(f"Not enough data for regression in group {grp}.")
         continue
-    # Perform log–log regression
+    # Perform log–log regression.
     X_log = np.log10(X)
     y_log = np.log10(y)
     slope, intercept = np.polyfit(X_log, y_log, 1)
     regression_params[grp] = (intercept, slope)
 
-    # Compute error metrics in log space
+    # Compute error metrics in log space.
     y_log_pred = intercept + slope * X_log
     rmse = np.sqrt(np.mean((y_log - y_log_pred) ** 2))
     r2 = 1 - np.sum((y_log - y_log_pred) ** 2) / np.sum((y_log - np.mean(y_log)) ** 2)
     print(f"{grp} regression: intercept = {intercept:.2f}, slope = {slope:.2f}, RMSE = {rmse:.2f}, R² = {r2:.2f}")
 
-    # Use common x-range for the fit line
+    # Use a common x-range for the fit line.
     X_fit = np.linspace(overall_x_min, overall_x_max, 100)
     y_fit = 10 ** (intercept + slope * np.log10(X_fit))
 
@@ -205,19 +202,18 @@ plt.legend(fontsize=9)
 plt.tight_layout()
 plt.show()
 
-
-# Per-Class Regression on Linear Scale
+# Per-Class Regression on Linear Scale.
 plt.figure(figsize=(10, 8))
 for grp in groups:
     sub_df = df_reg[df_reg["IEC_Class_Group"] == grp]
     if grp not in regression_params:
         continue
     intercept, slope = regression_params[grp]
-    # Use common x-range for all fits
+    # Use a common x-range for all fits.
     X_fit = np.linspace(overall_x_min, overall_x_max, 100)
     y_fit = 10 ** (intercept + slope * np.log10(X_fit))
 
-    # Plot data and fit
+    # Plot data and fit.
     plt.scatter(sub_df["SingleWT_Capacity"].values, sub_df["Rotor Diameter"].values,
                 s=20, alpha=0.6, color=group_colors.get(grp))
     plt.plot(X_fit, y_fit, linewidth=2.5, color=group_colors.get(grp),
@@ -230,21 +226,20 @@ plt.legend(fontsize=9)
 plt.tight_layout()
 plt.show()
 
-
-# Overall Regression Graphs
+# Overall Regression Graphs.
 X_overall = df_reg["SingleWT_Capacity"].values
 y_overall = df_reg["Rotor Diameter"].values
 X_log_overall = np.log10(X_overall)
 y_log_overall = np.log10(y_overall)
 b_overall, a_overall = np.polyfit(X_log_overall, y_log_overall, 1)
 
-# Compute overall error metrics
+# Compute overall error metrics.
 y_log_overall_pred = a_overall + b_overall * X_log_overall
 rmse_overall = np.sqrt(np.mean((y_log_overall - y_log_overall_pred) ** 2))
 r2_overall = 1 - np.sum((y_log_overall - y_log_overall_pred) ** 2) / np.sum(
     (y_log_overall - np.mean(y_log_overall)) ** 2)
 
-# Overall Log–Log Regression Plot
+# Overall Log–Log Regression Plot.
 plt.figure(figsize=(8, 6))
 plt.scatter(X_overall, y_overall, s=20, alpha=0.6, label="Data", color="gray")
 X_fit_overall = np.linspace(X_overall.min(), X_overall.max(), 100)
@@ -260,7 +255,7 @@ plt.legend(fontsize=9)
 plt.tight_layout()
 plt.show()
 
-# Overall Regression Plot on Linear Scale
+# Overall Regression Plot on Linear Scale.
 plt.figure(figsize=(8, 6))
 plt.scatter(X_overall, y_overall, s=20, alpha=0.6, label="Data", color="gray")
 plt.plot(X_fit_overall, y_fit_overall, linewidth=2.5, color="red",
@@ -272,10 +267,9 @@ plt.legend(fontsize=9)
 plt.tight_layout()
 plt.show()
 
+# Histograms with Improved Aesthetics.
 
-# Histograms with Improved Aesthetics
-
-# Histogram of Predicted Rotor Diameters (Overall Regression)
+# Histogram of Predicted Rotor Diameters (Overall Regression).
 mask_overall = df["Rotor Diameter"].isna() & df["SingleWT_Capacity"].notna()
 X_missing_overall = df.loc[mask_overall, "SingleWT_Capacity"].values
 predicted_overall = 10 ** (a_overall + b_overall * np.log10(X_missing_overall))
@@ -287,7 +281,7 @@ plt.title("Distribution of Predicted Rotor Diameters (Overall Regression)")
 plt.tight_layout()
 plt.show()
 
-# Histogram of Overall Rotor Diameters (Known Values)
+# Histogram of Overall Rotor Diameters (Known Values).
 plt.figure(figsize=(8, 6))
 plt.hist(df_reg["Rotor Diameter"].dropna(), bins=30, edgecolor='black', alpha=0.7)
 plt.xlabel("Rotor Diameter (m)")
@@ -296,8 +290,7 @@ plt.title("Overall Distribution of Rotor Diameters")
 plt.tight_layout()
 plt.show()
 
-
-# Fill Missing Rotor Diameters Using Class-Specific Regression
+# Fill Missing Rotor Diameters Using Class-Specific Regression.
 predicted_class = []
 mask_class = df["Rotor Diameter"].isna() & df["SingleWT_Capacity"].notna() & df["IEC_Class_Group"].notna()
 for idx, row in df.loc[mask_class].iterrows():
@@ -328,6 +321,6 @@ plt.title("Overall Distribution of Rotor Diameters (After Filling)")
 plt.tight_layout()
 plt.show()
 
-# Save the final data to the output Excel file using a relative path.
+# Save the final data to the output Excel file using the relative results directory.
 df.to_excel(full_output_path, index=False)
 print("Final data saved to:", full_output_path)
