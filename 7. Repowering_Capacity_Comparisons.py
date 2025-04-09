@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-
+# File paths for each approach (adjust paths as necessary)
 file_approach_1 = r"D:\SET 2023\Thesis Delft\Model\excels\Approach 1.xlsx"
 file_approach_2 = r"D:\SET 2023\Thesis Delft\Model\excels\Approach 2.xlsx"
 file_approach_3 = r"D:\SET 2023\Thesis Delft\Model\excels\Approach 3.xlsx"
@@ -11,11 +11,11 @@ file_approach_4 = r"D:\SET 2023\Thesis Delft\Model\excels\Approach 4.xlsx"
 approach_labels = {1: "Approach 1", 2: "Approach 2", 3: "Approach 3", 4: "Approach 4"}
 
 
-# load and clean data
 
+# Data loading and cleaning function
 def load_and_clean_data(file_path, rename_total_power=True):
     df = pd.read_excel(file_path)
-    # Rename columns for consistency
+    # Rename columns for consistency if needed
     rename_dict = {}
     if rename_total_power and 'Total power' in df.columns:
         rename_dict['Total power'] = 'Total Power (MW)'
@@ -30,7 +30,7 @@ def load_and_clean_data(file_path, rename_total_power=True):
     df = df[df['Commissioning date'].notna()]
     df = df[df['Commissioning date'] != '#ND']
 
-    # Normalize date columns
+
     def normalize_date(date):
         try:
             if '/' in str(date):
@@ -44,7 +44,7 @@ def load_and_clean_data(file_path, rename_total_power=True):
     if 'Decommissioning date' not in df.columns:
         df['Decommissioning date'] = pd.NaT
     df['Decommissioning date'] = df['Decommissioning date'].apply(normalize_date)
-    # Fill missing decommissioning dates (+20 years from commissioning)
+    # Fill missing decommissioning dates (defaulting to +20 years from commissioning)
     df['Decommissioning date'] = df['Decommissioning date'].fillna(
         df['Commissioning date'] + pd.DateOffset(years=20)
     )
@@ -60,9 +60,10 @@ def load_and_clean_data(file_path, rename_total_power=True):
     return df
 
 
-# Scenario functions (capacity over time)
 
+# Scenario functions (capacity over time)
 years = np.arange(2000, 2051)
+
 
 def calculate_capacity(df, start_repowering_year=2023, repowered_lifetime=50):
     """
@@ -73,19 +74,17 @@ def calculate_capacity(df, start_repowering_year=2023, repowered_lifetime=50):
     capacity = pd.DataFrame({'Year': years})
     capacity.set_index('Year', inplace=True)
     capacity['Operating Capacity'] = 0.0
-    df_local = df.copy()  # avoid mutating original
+    df_local = df.copy()
     for year in years:
 
-        # Identify turbines operating in this year:
         op = df_local[(df_local['Commissioning date'].dt.year <= year) &
                       (df_local['Decommissioning date'].dt.year >= year)]
         if year >= start_repowering_year:
-
             # Identify turbines decommissioning this year with repowered capacity
             rep = df_local[(df_local['Decommissioning date'].dt.year == year) &
                            (df_local['Repowered Total Capacity (MW)'] > 0)]
 
-            # Set repowered decommissioning date (new lifetime)
+
             df_local.loc[rep.index, 'Repowered Decommissioning date'] = pd.to_datetime(f'{year}') + pd.DateOffset(
                 years=repowered_lifetime)
             old_cap = rep['Total Power (MW)'].sum() if 'Total Power (MW)' in df_local.columns else 0
@@ -103,11 +102,12 @@ def calculate_capacity(df, start_repowering_year=2023, repowered_lifetime=50):
     capacity['Operating Capacity (GW)'] = capacity['Operating Capacity'] / 1000
     return capacity['Operating Capacity (GW)']
 
+
 def calculate_replacement_delayed_capacity(df, replacement_delay=1, replacement_lifetime=50,
                                            replacement_start_year=2022):
     """
     Replacement scenario with a one-year delay:
-    - The original turbine operates from its commissioning year until (decommissioning year - 1).
+    - The original turbine operates from its commissioning year until its decommissioning year.
     - In its decommissioning year the turbine goes offline.
     - One year later, the turbine is replaced with the same capacity (operating for a fixed lifetime).
     """
@@ -116,11 +116,10 @@ def calculate_replacement_delayed_capacity(df, replacement_delay=1, replacement_
         cap = row['Total Power (MW)']
         orig_start = row['Commissioning date'].year
         decomm_year = row['Decommissioning date'].year
-        orig_end = decomm_year
 
         # Add original capacity during its operating period
         for yr in years:
-            if yr >= orig_start and yr <= orig_end:
+            if yr >= orig_start and yr <= decomm_year:
                 capacity_series.loc[yr] += cap
 
         # If turbine decommissions at/after replacement_start_year, add its capacity back starting one year later
@@ -131,6 +130,7 @@ def calculate_replacement_delayed_capacity(df, replacement_delay=1, replacement_
                 if yr >= repl_start and yr <= repl_end:
                     capacity_series.loc[yr] += cap
     return capacity_series / 1000  # convert MW to GW
+
 
 def calculate_no_replacement_capacity(df):
     """
@@ -146,6 +146,7 @@ def calculate_no_replacement_capacity(df):
         capacity.loc[year, 'Operating Capacity'] = cap
     capacity['Operating Capacity (GW)'] = capacity['Operating Capacity'] / 1000
     return capacity['Operating Capacity (GW)']
+
 
 def calculate_repowered_increment(df, replacement_delay=1, replacement_start_year=2022):
     """
@@ -166,20 +167,21 @@ def calculate_repowered_increment(df, replacement_delay=1, replacement_start_yea
     return repowered_series / 1000  # convert MW to GW
 
 
-#  Load data for each approach and compute capacity curves
 
+# Load data for each approach
 df_a1 = load_and_clean_data(file_approach_1)
 df_a2 = load_and_clean_data(file_approach_2)
 df_a3 = load_and_clean_data(file_approach_3)
 df_a4 = load_and_clean_data(file_approach_4)
 
-# Compute repowering capacity curves for each approach
+
+# Compute capacity curves for each approach
 cap_a1 = calculate_capacity(df_a1)
 cap_a2 = calculate_capacity(df_a2)
 cap_a3 = calculate_capacity(df_a3)
 cap_a4 = calculate_capacity(df_a4)
 
-# Compute the replacement-delayed capacity curves for each approach
+# Replacement-delayed capacity curves
 rep_delayed_a1 = calculate_replacement_delayed_capacity(df_a1, replacement_delay=1, replacement_lifetime=50,
                                                         replacement_start_year=2022)
 rep_delayed_a2 = calculate_replacement_delayed_capacity(df_a2, replacement_delay=1, replacement_lifetime=50,
@@ -188,15 +190,16 @@ rep_delayed_a3 = calculate_replacement_delayed_capacity(df_a3, replacement_delay
                                                         replacement_start_year=2022)
 rep_delayed_a4 = calculate_replacement_delayed_capacity(df_a4, replacement_delay=1, replacement_lifetime=50,
                                                         replacement_start_year=2022)
-
-# Aggregate the replacement-delayed scenario (average across approaches)
+# Aggregate replacement-delayed capacity (average across approaches)
 rep_delayed_avg = (rep_delayed_a1 + rep_delayed_a2 + rep_delayed_a3 + rep_delayed_a4) / 4
 
 
-#  Plot 1: Combined Capacity Plot (Repowering vs. Replacement Strategy)
-plt.figure(figsize=(12, 6))
-years_int = years  # 2000 to 2050
+# Plot 1: Combined Capacity Plot (Repowering vs. Replacement Strategy)
 
+plt.figure(figsize=(12, 6))
+years_int = years
+
+# Define colors for each approach
 colors = {1: 'blue', 2: 'red', 3: 'green', 4: 'orange'}
 
 # Plot repowering curves (solid lines)
@@ -205,7 +208,7 @@ plt.plot(years_int, cap_a2, linestyle='-', color=colors[2], label=f"{approach_la
 plt.plot(years_int, cap_a3, linestyle='-', color=colors[3], label=f"{approach_labels[3]} Repowering")
 plt.plot(years_int, cap_a4, linestyle='-', color=colors[4], label=f"{approach_labels[4]} Repowering")
 
-# Plot aggregated replacement-delayed curve (dashed black)
+
 plt.plot(years_int, rep_delayed_avg, linestyle='--', color='black', linewidth=2,
          label="Replacement Strategy (1-year Delay)")
 
@@ -219,28 +222,35 @@ plt.tight_layout()
 plt.show()
 
 
-# Plot 2: Percentage of Successful Upgrades by Country (Separate Figures for Each Approach)
-
+# Plot 2: Combine 4 Successful Upgrades by Country Plots in a 2x2 Subplot
 approach_dfs = {1: df_a1, 2: df_a2, 3: df_a3, 4: df_a4}
 
-for approach, df in approach_dfs.items():
-    plt.figure(figsize=(8, 6))
+
+fig, axs = plt.subplots(2, 2, figsize=(12, 10))
+axs = axs.flatten()  # Flatten the 2D array of axes for easy iteration
+
+# Loop through each approach, computing and plotting successful upgrade percentages by country
+for idx, (approach, df) in enumerate(approach_dfs.items()):
+    ax = axs[idx]
     df_success = df.copy()
+    # Determine successful upgrades where repowered capacity exceeds original capacity
     df_success['Successful Upgrade'] = df_success['Repowered Total Capacity (MW)'] > df_success['Total Power (MW)']
 
-    # Group by country
+    # Group data by Country
     country_stats = df_success.groupby('Country').agg(
         total_parks=('Successful Upgrade', 'count'),
         successful_upgrades=('Successful Upgrade', 'sum')
     )
+    # Calculate percentage of successful upgrades
     country_stats['Success Percentage'] = (country_stats['successful_upgrades'] / country_stats['total_parks']) * 100
     country_stats = country_stats.sort_values(by='Success Percentage', ascending=False)
 
-    country_stats['Success Percentage'].plot(kind='bar', color='skyblue')
-    plt.title(f"{approach_labels[approach]}: % Successful Upgrades by Country")
-    plt.xlabel("Country")
-    plt.ylabel("Success (%)")
-    plt.grid(axis='y')
-    plt.tight_layout()
-    plt.show()
+    # Create bar plot on corresponding axis
+    country_stats['Success Percentage'].plot(kind='bar', color='skyblue', ax=ax)
+    ax.set_title(f"{approach_labels[approach]}: % Successful Upgrades by Country")
+    ax.set_xlabel("Country")
+    ax.set_ylabel("Success (%)")
+    ax.grid(axis='y')
 
+plt.tight_layout()
+plt.show()
