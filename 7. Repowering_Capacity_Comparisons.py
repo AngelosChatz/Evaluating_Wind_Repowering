@@ -3,10 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-file_approach_1 = r"D:\SET 2023\Thesis Delft\Model\Repowering_Calculation_Stage_2_int_ninjawt.xlsx"
-file_approach_2 = r"D:\SET 2023\Thesis Delft\Model\Repowering_Calculation_Stage_2_int_new_ninja_models.xlsx"
-file_approach_3 = r"D:\SET 2023\Thesis Delft\Model\Repowering_Calculation_Stage_2_int_new_rounding_ninjawt.xlsx"
-file_approach_4 = r"D:\SET 2023\Thesis Delft\Model\Repowering_Calculation_Stage_2_int_new_rounding_and_singlereplacement_ninja_wt.xlsx"
+file_approach_1 = r"D:\SET 2023\Thesis Delft\Model\excels\Approach 1.xlsx"
+file_approach_2 = r"D:\SET 2023\Thesis Delft\Model\excels\Approach 2.xlsx"
+file_approach_3 = r"D:\SET 2023\Thesis Delft\Model\excels\Approach 3.xlsx"
+file_approach_4 = r"D:\SET 2023\Thesis Delft\Model\excels\Approach 4.xlsx"
 
 approach_labels = {1: "Approach 1", 2: "Approach 2", 3: "Approach 3", 4: "Approach 4"}
 
@@ -116,7 +116,7 @@ def calculate_replacement_delayed_capacity(df, replacement_delay=1, replacement_
         cap = row['Total Power (MW)']
         orig_start = row['Commissioning date'].year
         decomm_year = row['Decommissioning date'].year
-        orig_end = decomm_year - 1  # original turbine stops operating one year before decommissioning
+        orig_end = decomm_year
 
         # Add original capacity during its operating period
         for yr in years:
