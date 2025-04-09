@@ -5,17 +5,27 @@ import os
 import re
 import rasterio
 from rasterio.warp import transform
+from pathlib import Path
 
+# Define the base directory as the directory containing this script.
+base_dir = Path(__file__).resolve().parent
 
+# Create a directory path for the data folder (make sure your repo includes a folder named 'data')
+data_dir = base_dir / "data"
 
-input_path = r"D:\SET 2023\Thesis Delft\Model"
+# Define the input and output file names.
 input_file = "Windfarms_World_20230530.xlsx"  # main Excel file
 output_file = "Windfarms_World_20230530_final_1.xlsx"  # final output file
-full_input_path = os.path.join(input_path, input_file)
-full_output_path = os.path.join(input_path, output_file)
-tif_path = r"D:\gwa3_250_windspeed_100m.tif"  # IEC classification TIFF
 
+# Construct full paths using the relative data directory.
+full_input_path = data_dir / input_file
+full_output_path = data_dir / output_file
 
+# Define the TIFF file path (assumed to be in the 'data' folder too).
+tif_file = "gwa3_250_windspeed_100m.tif"  # IEC classification TIFF
+tif_path = data_dir / tif_file
+
+# Read the Excel file from the relative path.
 df = pd.read_excel(full_input_path, sheet_name=2, header=0)
 df = df.iloc[:, :27]
 df.columns = [
@@ -37,9 +47,7 @@ df["Longitude"] = pd.to_numeric(df["Longitude"], errors="coerce")
 df = df.dropna(subset=["Latitude", "Longitude"]).copy()
 
 
-
 # Extract Rotor Diameter based on patters per manufacturer
-
 def extract_rotor_diameter(turbine_str, manufacturer):
     if not isinstance(turbine_str, str):
         return None
@@ -98,7 +106,6 @@ print(f"Percentage of missing values in Rotor Diameter (onshore, Europe): {missi
 
 
 # Compute Single WT Capacity
-
 df["Total power"] = pd.to_numeric(df["Total power"], errors='coerce')
 df["Number of turbines"] = pd.to_numeric(df["Number of turbines"], errors='coerce')
 df = df.dropna(subset=["Total power", "Number of turbines"]).copy()
@@ -106,7 +113,6 @@ df["SingleWT_Capacity"] = df["Total power"] / df["Number of turbines"]
 
 
 # Add IEC Classification from TIFF File
-
 iec_mapping = {
     0: "1A+",
     1: "1A",
@@ -123,13 +129,11 @@ iec_mapping = {
     12: "S"
 }
 
-
 def extract_numeric_class(iec_class):
     if iec_class and iec_class[0].isdigit():
         return int(iec_class[0])
     else:
         return np.nan
-
 
 # Prepare coordinates for raster sampling (rasterio expects (lon, lat))
 coords = list(zip(df["Longitude"], df["Latitude"]))
@@ -153,7 +157,6 @@ df["IEC_Class_Group"] = df["IEC_Class_Num"].apply(lambda x: f"Class {int(x)}" if
 
 
 # Per-Class Log–Log Regression
-
 df_reg = df.dropna(subset=["Rotor Diameter", "SingleWT_Capacity"]).copy()
 df_reg = df_reg[df_reg["SingleWT_Capacity"] > 0]
 
@@ -203,8 +206,7 @@ plt.tight_layout()
 plt.show()
 
 
-#  Per-Class Regression on Linear Scale
-
+# Per-Class Regression on Linear Scale
 plt.figure(figsize=(10, 8))
 for grp in groups:
     sub_df = df_reg[df_reg["IEC_Class_Group"] == grp]
@@ -230,7 +232,6 @@ plt.show()
 
 
 # Overall Regression Graphs
-
 X_overall = df_reg["SingleWT_Capacity"].values
 y_overall = df_reg["Rotor Diameter"].values
 X_log_overall = np.log10(X_overall)
@@ -272,7 +273,7 @@ plt.tight_layout()
 plt.show()
 
 
-# 9. Histograms with Improved Aesthetics
+# Histograms with Improved Aesthetics
 
 # Histogram of Predicted Rotor Diameters (Overall Regression)
 mask_overall = df["Rotor Diameter"].isna() & df["SingleWT_Capacity"].notna()
@@ -296,8 +297,7 @@ plt.tight_layout()
 plt.show()
 
 
-#  Fill Missing Rotor Diameters Using Class-Specific Regression
-
+# Fill Missing Rotor Diameters Using Class-Specific Regression
 predicted_class = []
 mask_class = df["Rotor Diameter"].isna() & df["SingleWT_Capacity"].notna() & df["IEC_Class_Group"].notna()
 for idx, row in df.loc[mask_class].iterrows():
@@ -328,6 +328,6 @@ plt.title("Overall Distribution of Rotor Diameters (After Filling)")
 plt.tight_layout()
 plt.show()
 
-
+# Save the final data to the output Excel file using a relative path.
 df.to_excel(full_output_path, index=False)
 print("Final data saved to:", full_output_path)
