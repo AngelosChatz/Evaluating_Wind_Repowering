@@ -1,7 +1,17 @@
 import pandas as pd
 import math
 import re
+from pathlib import Path
 
+# Set up the base directory, and define input (data) and output (results) folders
+base_dir = Path(__file__).resolve().parent
+results_dir = base_dir / "results"
+
+# Define file paths relative to the directories
+input_excel = results_dir / "Windfarms_World_20230530_with_IEC_Elevation_v2_area_classifications.xlsx"
+output_excel = results_dir / "Approach_3.xlsx"
+
+# New wind turbine dataset (updated with new models)
 turbines = [
     # IEC Class 1 turbines
     {"Model": "Siemens SWT 3-101", "Capacity": 3.0, "RotorDiameter": 101, "IEC_Class_Num": 1},
@@ -32,10 +42,9 @@ turbines = [
     {"Model": "Nordex 149-4500", "Capacity": 4.5, "RotorDiameter": 149, "IEC_Class_Num": 0}
 ]
 
-
 def land_area(diameter, terrain_type):
     """
-    Returns the estimated land area required (m^2) per turbine depending on the terrain type:
+    Returns the estimated land area required (m²) per turbine depending on the terrain type:
       - Flat terrain    : 28 * D^2   (derived from 7D x 4D spacing)
       - Complex terrain : 54 * D^2   (derived from 9D x 6D spacing)
     """
@@ -48,9 +57,7 @@ def land_area(diameter, terrain_type):
         # If unknown or missing, default to flat spacing
         return 28 * (diameter ** 2)
 
-
 def best_fitting_turbine_for_iec_class_min_turbines(turbine_list, terrain_type, iec_class_num, available_area):
-
     matching_turbines = [t for t in turbine_list if t["IEC_Class_Num"] == iec_class_num]
     if not matching_turbines:
         return None, 0, 0, None
@@ -77,20 +84,15 @@ def best_fitting_turbine_for_iec_class_min_turbines(turbine_list, terrain_type, 
     best_ratio = best_candidate["Capacity"] / best_turbine_area if best_turbine_area else 0
     return best_candidate, best_ratio, best_turb_count, best_turbine_area
 
-
 def main():
-    # Adjust these to your actual Excel file paths
-    input_excel = r"D:\SET 2023\Thesis Delft\Model\Windfarms_World_20230530_with_IEC_Elevation_v2_area_classifications.xlsx"
-    output_excel = r"D:\SET 2023\Thesis Delft\Model\Repowering_Calculation_Stage_2_int_new_rounding_ninjawt.xlsx"
-
-
+    # Read the wind farm data from Excel using the relative input path
     df = pd.read_excel(input_excel)
     print(f"Read {len(df)} rows from {input_excel}.")
 
-
+    # Filter to keep only rows where "Active in 2022" is True
     df = df[df["Active in 2022"] == True]
 
-
+    # Convert IEC_Class_Num to integer if needed
     if "IEC_Class_Num" in df.columns:
         df["IEC_Class_Num"] = pd.to_numeric(df["IEC_Class_Num"], errors="coerce").fillna(0).astype(int)
     else:
@@ -134,7 +136,7 @@ def main():
             total_new_capacities.append(None)
             new_total_park_areas.append(None)
         else:
-            # 3.3. Calculate total new capacity and new park area
+            # 3.3. Calculate total new capacity and new park area based on chosen turbine spacing
             new_total_capacity = new_turb_count * best_turb["Capacity"]
             new_total_park_area = turbine_area * new_turb_count
 
@@ -152,10 +154,9 @@ def main():
     df["Total_New_Capacity"] = total_new_capacities
     df["New_Total_Park_Area (m²)"] = new_total_park_areas
 
-    # 3.6. Save the updated DataFrame to Excel
+    # 3.6. Save the updated DataFrame to Excel using the relative output path
     df.to_excel(output_excel, index=False)
     print(f"\nUpdated database saved to {output_excel}")
-
 
 if __name__ == "__main__":
     main()

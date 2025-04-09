@@ -1,8 +1,20 @@
 import pandas as pd
 import math
 import re
+from pathlib import Path
 
+# Define the base directory (the directory containing this script)
+base_dir = Path(__file__).resolve().parent
 
+# Define directories for input files and output files
+results_dir = base_dir / "results"
+results_dir.mkdir(exist_ok=True)  # Create the results folder if it doesn't exist
+
+# Set file paths relative to the defined directories
+input_excel = results_dir / "Windfarms_World_20230530_with_IEC_Elevation_v2_area_classifications.xlsx"
+output_excel = results_dir / "Approach_1.xlsx"
+
+# List of turbine dictionaries with properties for each IEC class
 turbines = [
     # IEC Class 1 turbines
     {"Model": "Siemens SWT 3-101", "Capacity": 3.0, "RotorDiameter": 101, "IEC_Class_Num": 1},
@@ -33,12 +45,11 @@ turbines = [
     {"Model": "Nordex 149-4500", "Capacity": 4.5, "RotorDiameter": 149, "IEC_Class_Num": 0}
 ]
 
-
 def land_area(diameter, terrain_type):
     """
-    Returns the estimated land area required (m^2) per turbine depending on the terrain type:
-      - Flat terrain    : 28 * D^2   (derived from 7D x 4D spacing)
-      - Complex terrain : 54 * D^2   (derived from 9D x 6D spacing)
+    Returns the estimated land area required (m²) per turbine depending on the terrain type:
+      - Flat terrain    : 28 * D²   (derived from 7D x 4D spacing)
+      - Complex terrain : 54 * D²   (derived from 9D x 6D spacing)
     """
     t = str(terrain_type).lower()
     if t == "flat":
@@ -46,12 +57,9 @@ def land_area(diameter, terrain_type):
     elif t == "complex":
         return 54 * (diameter ** 2)
     else:
-        # If unknown or missing, default to flat spacing
         return 28 * (diameter ** 2)
 
-
 def best_fitting_turbine_for_iec_class(turbine_list, terrain_type, iec_class_num, available_area):
-
     # Filter turbines by matching IEC class
     matching_turbines = [t for t in turbine_list if t["IEC_Class_Num"] == iec_class_num]
 
@@ -68,26 +76,19 @@ def best_fitting_turbine_for_iec_class(turbine_list, terrain_type, iec_class_num
     # Try each turbine until one fits at least one unit
     for t in sorted_turbines:
         turbine_area = land_area(t["RotorDiameter"], terrain_type)
-        new_turb_count = int(available_area // turbine_area)  # floor division
+        new_turb_count = int(available_area // turbine_area)  # floor division to get full units
         if new_turb_count >= 1:
             best_ratio = t["Capacity"] / turbine_area
             return t, best_ratio, new_turb_count, turbine_area
 
-    # If no turbine fits even once, return None
     return None, 0, 0, None
 
-
-
 def main():
-    # Adjust these to your actual Excel file paths
-    input_excel = r"D:\SET 2023\Thesis Delft\Model\Windfarms_World_20230530_with_IEC_Elevation_v2_area_classifications.xlsx"
-    output_excel = r"D:\SET 2023\Thesis Delft\Model\Repowering_Calculation_Stage_2_int_ninjawt.xlsx"
-
-    # Read the wind farm data from Excel
+    # Read the wind farm data from Excel using the relative input path
     df = pd.read_excel(input_excel)
     print(f"Read {len(df)} rows from {input_excel}.")
 
-    # Filter to keep only the rows where Active in 2022 is True
+    # Filter to keep only rows where "Active in 2022" is True
     df = df[df["Active in 2022"] == True]
 
     # Convert IEC_Class_Num to integer if needed
@@ -96,29 +97,28 @@ def main():
     else:
         print("Warning: IEC_Class_Num column not found in the Excel file.")
 
-    # Prepare columns for results
+    # Prepare lists to store the recommendation results
     recommended_models = []
     recommended_capacities = []
     new_turbine_counts = []
     total_new_capacities = []
-    new_total_park_areas = []  # New column for the new total park size
 
     for idx, row in df.iterrows():
-        # 3.1. Extract site data
+        # Extract site data
         terrain = row.get("Terrain_Type", "flat")
-        iec_num = row.get("IEC_Class_Num", 0)  # after numeric conversion, 0 means invalid
+        iec_num = row.get("IEC_Class_Num", 0)  # after conversion, 0 means invalid/missing
 
-        # Use the Total Park Area (m²) column directly (assumed to be provided)
+        # Use the Total Park Area (m²) column from the DataFrame
         old_area = row.get("Total Park Area (m²)")
         if old_area is None or (isinstance(old_area, float) and math.isnan(old_area)):
+            print(f"Row {idx}: Total Park Area (m²) is missing. Skipping calculation for this row.")
             recommended_models.append(None)
             recommended_capacities.append(None)
             new_turbine_counts.append(None)
             total_new_capacities.append(None)
-            new_total_park_areas.append(None)
             continue
 
-        # 3.2. Find the best replacement turbine that fits in the available area
+        # Find the best replacement turbine that fits in the available area
         best_turb, best_ratio, new_turb_count, new_area = best_fitting_turbine_for_iec_class(
             turbine_list=turbines,
             terrain_type=terrain,
@@ -132,32 +132,25 @@ def main():
             recommended_capacities.append(None)
             new_turbine_counts.append(None)
             total_new_capacities.append(None)
-            new_total_park_areas.append(None)
         else:
-            # 3.3. Calculate total new capacity
+            # Calculate total new capacity based on the number of turbines that can fit
             new_total_capacity = new_turb_count * best_turb["Capacity"]
 
-            # Calculate new total park area based on the chosen turbine spacing layout
-            new_total_park_area = new_area * new_turb_count
-
-            # 3.4. Store results
+            # Store results
             recommended_models.append(best_turb["Model"])
             recommended_capacities.append(best_turb["Capacity"])
             new_turbine_counts.append(new_turb_count)
             total_new_capacities.append(new_total_capacity)
-            new_total_park_areas.append(new_total_park_area)
 
-    # 3.5. Add new columns to the DataFrame
+    # Add new columns to the DataFrame with the calculated recommendations
     df["Recommended_WT_Model"] = recommended_models
     df["Recommended_WT_Capacity"] = recommended_capacities
     df["New_Turbine_Count"] = new_turbine_counts
     df["Total_New_Capacity"] = total_new_capacities
-    df["New_Total_Park_Area (m²)"] = new_total_park_areas
 
-    # 3.6. Save the updated DataFrame to Excel
+    # Save the updated DataFrame to Excel using the relative output path
     df.to_excel(output_excel, index=False)
     print(f"\nUpdated database saved to {output_excel}")
-
 
 if __name__ == "__main__":
     main()

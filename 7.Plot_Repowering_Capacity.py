@@ -1,14 +1,19 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import math
+import re
+from pathlib import Path
 
+# Define base directory and subdirectories
+base_dir = Path(__file__).resolve().parent
+results_dir = base_dir / "results"
 
-
-file_approach_1 = r"D:\SET 2023\Thesis Delft\Model\excels\Approach 1.xlsx"
-file_approach_2 = r"D:\SET 2023\Thesis Delft\Model\excels\Approach 2.xlsx"
-file_approach_3 = r"D:\SET 2023\Thesis Delft\Model\excels\Approach 3.xlsx"
-file_approach_4 = r"D:\SET 2023\Thesis Delft\Model\excels\Approach 4.xlsx"
-
+# Define file paths for each approach using relative paths
+file_approach_1 = results_dir / "Approach_1.xlsx"
+file_approach_2 = results_dir / "Approach_2.xlsx"
+file_approach_3 = results_dir / "Approach_3.xlsx"
+file_approach_4 = results_dir / "Approach_4.xlsx"
 
 approaches = {
     "Approach 1": file_approach_1,
@@ -17,8 +22,8 @@ approaches = {
     "Approach 4": file_approach_4,
 }
 
-
 years = pd.date_range(start='2000', end='2050', freq='YE')
+
 
 def load_and_clean_data(file_path, rename_total_power=True):
     """
@@ -70,7 +75,6 @@ def load_and_clean_data(file_path, rename_total_power=True):
 
 
 def calculate_no_replacement_capacity(df):
-
     capacity = pd.DataFrame({'Year': years.year})
     capacity.set_index('Year', inplace=True)
     capacity['Operating Capacity'] = 0.0
@@ -157,9 +161,7 @@ def calculate_growth_rates(df, col, year_range):
     return growth
 
 
-
 # Prepare Data for Combined Plots
-
 
 df_baseline = load_and_clean_data(file_approach_1)
 baseline_capacity = calculate_no_replacement_capacity(df_baseline.copy())
@@ -224,23 +226,19 @@ if 'Country' in df_baseline.columns:
 else:
     raise ValueError("Column 'Country' not found in baseline data.")
 
-# For each approach, get repowered capacity by country (in GW).
 repowered_country_dict = {}
 for approach_name, file_path in approaches.items():
     df = load_and_clean_data(file_path)
     if 'Country' in df.columns:
         repowered = (df.groupby('Country')['Repowered Total Capacity (MW)'].sum() / 1000).rename(
-            f"{approach_name} Repowered (2050)")
+            f"{approach_name} Repowered (2050)"
+        )
         repowered_country_dict[approach_name] = repowered
     else:
         print(f"Column 'Country' not found in {approach_name}; skipping repowered data for this approach.")
 
-
 df_bar = pd.concat([baseline_by_country] + list(repowered_country_dict.values()), axis=1).fillna(0)
-# Sort countries by baseline capacity
 df_bar = df_bar.sort_values("Baseline (2022)", ascending=False)
-
-# Create grouped bar chart:
 countries = df_bar.index.tolist()
 n_bars = df_bar.shape[1]
 x = np.arange(len(countries))
@@ -262,8 +260,7 @@ plt.show()
 # 3. Growth Rate Subplots (2x2)
 
 fig, axs = plt.subplots(2, 2, figsize=(14, 10))
-axs = axs.flatten()  # Flatten for easier iteration
-
+axs = axs.flatten()
 for ax, approach_name in zip(axs, approaches.keys()):
     ax.plot(year_range, decom_growth_dict[approach_name], label="Decommissioning Growth",
             color="purple", marker="o", linewidth=2)

@@ -5,13 +5,22 @@ from rasterio.windows import from_bounds
 from rasterio.transform import rowcol
 import concurrent.futures
 import math
+from pathlib import Path
 
-# File paths
-input_excel = r"D:\SET 2023\Thesis Delft\Model\Windfarms_World_20230530_final_2.xlsx"
-output_excel = r"D:\SET 2023\Thesis Delft\Model\Windfarms_World_20230530_with_IEC_Elevation_v2.xlsx"
-dem_file = r"D:\eurodem.tif"
+# Define the base directory as the directory containing this script.
+base_dir = Path(__file__).resolve().parent
 
-# Define European bounding box and convert to arcseconds
+# Define relative directories for inputs (data) and outputs (results)
+data_dir = base_dir / "data"
+results_dir = base_dir / "results"
+results_dir.mkdir(exist_ok=True)  # Create results folder if it doesn't exist
+
+# Define file paths relative to the directories.
+input_excel = results_dir / "Windfarms_World_20230530_final_1.xlsx"
+output_excel = results_dir / "Windfarms_World_20230530_with_IEC_Elevation_v2.xlsx"
+dem_file = data_dir / "eurodem.tif"
+
+# Define European bounding box in degrees, then convert to arcseconds.
 europe_bounds_deg = (-20, 35, 40, 70)
 europe_bounds_arcsec = tuple(bound * 3600 for bound in europe_bounds_deg)
 
@@ -31,7 +40,7 @@ extent_europe = (dem_left / 3600, dem_right / 3600, dem_bottom / 3600, dem_top /
 # Compute pixel spacing in meters
 pixel_width_deg = abs(new_transform.a) / 3600
 pixel_height_deg = abs(new_transform.e) / 3600
-pixel_height_m = pixel_height_deg * 111320
+pixel_height_m = pixel_height_deg * 111320  # Approximate meters per degree latitude
 center_lat = (extent_europe[2] + extent_europe[3]) / 2.0
 pixel_width_m = pixel_width_deg * 111320 * math.cos(math.radians(center_lat))
 
@@ -56,7 +65,7 @@ rows, cols = rowcol(new_transform,
 df.loc[valid, "row"] = rows
 df.loc[valid, "col"] = cols
 
-# Compute TRI and slope using a 5x5 window
+# Compute TRI and slope using a 5x5 window.
 half_window_x = 2
 half_window_y = 2
 tri_threshold = 3.0
@@ -103,3 +112,4 @@ df.loc[~valid, "Terrain_Type"] = "Flat"
 
 df.drop(columns=["row", "col", "Longitude_arcsec", "Latitude_arcsec", "in_dem"], inplace=True)
 df.to_excel(output_excel, index=False)
+print("Final data saved to:", output_excel)

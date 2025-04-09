@@ -1,20 +1,29 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import math
+import re
+from pathlib import Path
 
-# ---------------------------------------------------------
-# Define file paths for each approach (update paths as needed)
+# Set up base directory and subdirectories
+base_dir = Path(__file__).resolve().parent
+results_dir = base_dir / "results"
+
+
+# Define file paths for each approach using relative paths
 files = {
-    "Approach 1": r"D:\SET 2023\Thesis Delft\Model\excels\Approach 1.xlsx",
-    "Approach 2": r"D:\SET 2023\Thesis Delft\Model\excels\Approach 2.xlsx",
-    "Approach 3": r"D:\SET 2023\Thesis Delft\Model\excels\Approach 3.xlsx",
-    "Approach 4": r"D:\SET 2023\Thesis Delft\Model\excels\Approach 4.xlsx"
+    "Approach 1": results_dir / "Approach_1.xlsx",
+    "Approach 2": results_dir / "Approach_2.xlsx",
+    "Approach 3": results_dir / "Approach_3.xlsx",
+    "Approach 4": results_dir / "Approach_4.xlsx"
 }
 
-# =========================================================
-# SECTION 1: LINE CHART – CAPACITY 2000–2050 (All Approaches)
-# =========================================================
+# Define labels for approaches for plot legends
+approach_labels = {1: "Approach 1", 2: "Approach 2", 3: "Approach 3", 4: "Approach 4"}
 
+
+
+# SECTION 1: LINE CHART – CAPACITY 2000–2050
 def compute_lines(file_path):
     # Read data from Excel file
     df = pd.read_excel(file_path)
@@ -103,13 +112,14 @@ def compute_lines(file_path):
     for y in range(2000, 2051):
         combined_line[y] = base_growth[y] + repower_line.get(y, 0)
 
-    years = list(range(2000, 2051))
-    baseline_line = [base_growth[y] for y in years]
-    combined = [combined_line[y] for y in years]
+    years_list = list(range(2000, 2051))
+    baseline_line = [base_growth[y] for y in years_list]
+    combined = [combined_line[y] for y in years_list]
 
-    return years, baseline_line, combined
+    return years_list, baseline_line, combined
 
-# Compute baseline and combined capacities for the line chart.
+
+# Compute baseline and combined capacities for the line chart using one approach (e.g., Approach 1)
 years, baseline_mw, _ = compute_lines(files["Approach 1"])
 combined_results = {}
 for name, file_path in files.items():
@@ -134,10 +144,8 @@ plt.grid(True)
 plt.tight_layout()
 plt.show()
 
-# =========================================================
-# SECTION 2: HORIZONTAL BAR CHART – REPOWERED POWER DENSITY (Approach 3)
-# =========================================================
 
+# SECTION 2: HORIZONTAL BAR CHART – REPOWERED POWER DENSITY (Only for Approach 3)
 repowered_df = pd.read_excel(files["Approach 3"])
 cols_to_clean = ['Country', 'Commissioning date', 'Decommissioning date', 'Total_New_Capacity',
                  'New_Total_Park_Area (m²)']
@@ -156,7 +164,6 @@ if 'Total_New_Capacity' in repowered_df.columns:
 if 'New_Total_Park_Area (m²)' in repowered_df.columns:
     repowered_df['New_Total_Park_Area (m²)'] = pd.to_numeric(repowered_df['New_Total_Park_Area (m²)'], errors='coerce')
 
-# Only consider rows with positive repowered capacity
 repowered_df = repowered_df[repowered_df['Total_New_Capacity'] > 0]
 grouped_rep = repowered_df.groupby('Country').agg({
     'Total_New_Capacity': 'sum',
@@ -167,7 +174,6 @@ grouped_rep['Repowered Power Density (MW/km²)'] = (
         grouped_rep['Total_New_Capacity'] / (grouped_rep['New_Total_Park_Area (m²)'] / 1e6)
 )
 
-# Sort descending by repowered power density
 grouped_rep = grouped_rep.sort_values('Repowered Power Density (MW/km²)', ascending=False)
 
 plt.figure(figsize=(12, 8))
@@ -177,14 +183,11 @@ plt.title("Repowered Power Density per Country (Approach 3)", fontsize=16, fontw
 plt.xlabel("Repowered Power Density (MW/km²)", fontsize=14)
 plt.ylabel("Country", fontsize=14)
 plt.ticklabel_format(style='plain', axis='x')
-plt.gca().invert_yaxis()  # Highest value on top
+plt.gca().invert_yaxis()
 plt.tight_layout()
 plt.show()
 
-# =========================================================
 # SECTION 3: COMPARISON – ORIGINAL vs. REPOWERED POWER DENSITY (Approach 3)
-# =========================================================
-
 original_df = pd.read_excel(files["Approach 3"])
 cols_to_clean_orig = ['Country', 'Total power', 'Total Park Area (m²)']
 for col in cols_to_clean_orig:
@@ -228,11 +231,9 @@ plt.legend()
 plt.tight_layout()
 plt.show()
 
-# =========================================================
-# SECTION 4 (UPDATED): 2050 COUNTRY LAND AREA COMPARISON – STACKED BARS
-#              Comparing Approach 2 and Approach 3 (Baseline Land Area + Repowered Land Area)
-# =========================================================
 
+
+# SECTION 4: 2050 COUNTRY LAND AREA COMPARISON – STACKED BARS
 def compute_country_capacities(file_path):
     """
     Compute the 2050 capacity for each country for:
@@ -329,11 +330,8 @@ def compute_land_area_data(file_path):
     Computes the land area data for each country for a given approach.
     Returns a DataFrame with columns: Country, Baseline Land Area (km²), Repowered Land Area (km²).
     """
-    # Compute 2050 capacities using the previously defined function
     cap_df = compute_country_capacities(file_path)
     cap_df['Repowered Capacity (MW)'] = cap_df['Combined_2050'] - cap_df['Baseline_2050']
-
-    # Compute original power density from the same file (for baseline land area calculation)
     orig_df = pd.read_excel(file_path)
     cols_to_clean_orig = ['Country', 'Total power', 'Total Park Area (m²)']
     for col in cols_to_clean_orig:
@@ -351,52 +349,39 @@ def compute_land_area_data(file_path):
     grouped_orig['Original Power Density (MW/km²)'] = (
             grouped_orig['Total power'] / (grouped_orig['Total Park Area (m²)'] / 1e6)
     )
-
-    # Merge power density into capacity DataFrame
     merged_df = pd.merge(cap_df, grouped_orig[['Country', 'Original Power Density (MW/km²)']],
                          on='Country', how='left')
-
-    # Calculate Baseline and Repowered Land Area (km²)
     merged_df['Baseline Land Area (km²)'] = merged_df['Baseline_2050'] / merged_df['Original Power Density (MW/km²)']
     merged_df['Repowered Land Area (km²)'] = merged_df['Repowered Capacity (MW)'] / merged_df[
         'Original Power Density (MW/km²)']
-
     return merged_df[['Country', 'Baseline Land Area (km²)', 'Repowered Land Area (km²)']]
 
-# Compute land area data for Approach 2 and Approach 3
+
+# Compute land area data for Approach 2 and Approach 3 using relative paths
 land_data_2 = compute_land_area_data(files["Approach 2"])
 land_data_3 = compute_land_area_data(files["Approach 3"])
-
-# Merge the two datasets on Country using an outer join (fill missing values with 0)
 land_compare = pd.merge(land_data_2, land_data_3, on='Country', how='outer', suffixes=('_2', '_3')).fillna(0)
-
-# Sort countries by total land area (baseline + repowered) for Approach 2 in descending order
 land_compare['Total_Area_2'] = land_compare['Baseline Land Area (km²)_2'] + land_compare['Repowered Land Area (km²)_2']
 land_compare = land_compare.sort_values('Total_Area_2', ascending=False)
 
-# Create grouped stacked bar chart: for each country, plot two bars (one per approach)
 countries = land_compare['Country']
 x = np.arange(len(countries))
-width = 0.35  # width of each bar
+width = 0.35
 
 plt.figure(figsize=(14, 8))
-
-# Approach 2 stacked bar (baseline at bottom, repowered on top)
 plt.bar(x - width / 2, land_compare['Baseline Land Area (km²)_2'], width,
         label='Approach 2 Baseline', color='slateblue')
 plt.bar(x - width / 2, land_compare['Repowered Land Area (km²)_2'], width,
         bottom=land_compare['Baseline Land Area (km²)_2'], label='Approach 2 Repowered', color='mediumseagreen')
-
-# Approach 3 stacked bar (baseline at bottom, repowered on top)
 plt.bar(x + width / 2, land_compare['Baseline Land Area (km²)_3'], width,
         label='Approach 3 Baseline', color='darkorange')
 plt.bar(x + width / 2, land_compare['Repowered Land Area (km²)_3'], width,
         bottom=land_compare['Baseline Land Area (km²)_3'], label='Approach 3 Repowered', color='tomato')
-
 plt.xticks(x, countries, rotation=45, ha='right', fontsize=12)
 plt.xlabel("Country", fontsize=14)
 plt.ylabel("Land Area (km²)", fontsize=14)
-plt.title("Required Land Area Comparison (Approaches 2 & 3)\nStacked: Baseline vs. Repowered", fontsize=16, fontweight='bold')
+plt.title("Required Land Area Comparison (Approaches 2 & 3)\nStacked: Baseline vs. Repowered", fontsize=16,
+          fontweight='bold')
 plt.legend()
 plt.tight_layout()
 plt.show()
