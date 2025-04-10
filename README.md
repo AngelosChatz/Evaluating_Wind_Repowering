@@ -27,7 +27,7 @@ Firstly, install the necessary libraries listed in requirements.txt and athen ru
   Approach_4_ninja_wt
 7.Repowering_Capacity_Comaprisons        --> Creates Coparative Plots between approaches, mainly cummulative EU total capacity projected to 2050 and succesfull repowerings per country
   Additional_Result_plots                --> Growth rate incorporation in cummulative EU projection to 2050, Power density per country, Comparative power density per approach, Required land area comparison (2,3,baseline)
-  Plot_Repowering_Capacity               -->
+  Plot_Repowering_Capacity               --> Total Eu Capacity for each approach, with 1 year wind farm construction delay, Approaches comparison bar chart per country, and growth rate per approach 
 
 The resulting output will be an excel file with the following Columns:
 
