@@ -12,7 +12,7 @@ Data:
 
 1. Wind farm database            - Windfarms_World_20230530.xlsx
 2. GIS file with classifications - gwa3_250_windspeed_100m.tif
-3. Elevation map                 - Elevation3x3.tif
+3. Elevation map                 - Eurodem.tif
 
 Firstly, install the necessary libraries listed in requirements.txt and athen run the submodels in the following prioritized order:
 
