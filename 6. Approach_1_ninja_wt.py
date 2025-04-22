@@ -17,16 +17,16 @@ output_excel = results_dir / "Approach_1.xlsx"
 # List of turbine dictionaries with properties for each IEC class
 turbines = [
     # IEC Class 1 turbines
-    {"Model": "Siemens SWT 3-101", "Capacity": 3.0, "RotorDiameter": 101, "IEC_Class_Num": 1},
+    {"Model": "Siemens.SWT.3.0.101", "Capacity": 3.0, "RotorDiameter": 101, "IEC_Class_Num": 1},
     {"Model": "Siemens SWT 4.3-120", "Capacity": 4.3, "RotorDiameter": 120, "IEC_Class_Num": 1},
     {"Model": "Siemens SWT 8-154", "Capacity": 8.0, "RotorDiameter": 154, "IEC_Class_Num": 1},
-    {"Model": "Siemens SWT 3.6-107", "Capacity": 3.6, "RotorDiameter": 107, "IEC_Class_Num": 1},
+    {"Model": "Siemens.SWT.3.6.107", "Capacity": 3.6, "RotorDiameter": 107, "IEC_Class_Num": 1},
     {"Model": "Siemens Gamesa SG 6-154", "Capacity": 6.0, "RotorDiameter": 154, "IEC_Class_Num": 1},
     {"Model": "Siemens Gamesa SG 8.5-167", "Capacity": 8.5, "RotorDiameter": 167, "IEC_Class_Num": 1},
     {"Model": "Nordex 100-3300", "Capacity": 3.3, "RotorDiameter": 100, "IEC_Class_Num": 1},
 
     # IEC Class 2 turbines
-    {"Model": "E82 3000", "Capacity": 3.0, "RotorDiameter": 82, "IEC_Class_Num": 2},
+    {"Model": "Enercon.E82.3000", "Capacity": 3.0, "RotorDiameter": 82, "IEC_Class_Num": 2},
     {"Model": "Vestas V90-3.0", "Capacity": 3.0, "RotorDiameter": 90, "IEC_Class_Num": 2},
     {"Model": "Vestas V136-4.0", "Capacity": 4.0, "RotorDiameter": 136, "IEC_Class_Num": 2},
     {"Model": "Siemens Gamesa SG 4.5-145", "Capacity": 4.5, "RotorDiameter": 145, "IEC_Class_Num": 2},
