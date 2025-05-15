@@ -3,15 +3,39 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 #%% Define file paths
-excel_path = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Approach_2_Cf.xlsx"
-output_yield_file = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Energy_Yield_Parks.xlsx"
-dual_axis_chart_path = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\dual_axis_bar_chart.png"
-pie_chart_path = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\annual_energy_pie_TWh.png"
+excel_path            = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Approach_2_Cf.xlsx"
+old_excel_path        = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Approach_2_Cf_old.xlsx"
+output_yield_file     = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Energy_Yield_Parks.xlsx"
+dual_axis_chart_path  = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\dual_axis_bar_chart.png"
+pie_chart_path        = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\annual_energy_pie_TWh.png"
 
-#%% Read data and clean
+#%% Read main data and clean
 df = pd.read_excel(excel_path, index_col=0)
-df["Total_New_Capacity"] = pd.to_numeric(df["Total_New_Capacity"], errors='coerce').fillna(0)
-df["CapacityFactor"]     = pd.to_numeric(df["CapacityFactor"], errors='coerce').fillna(0)
+df["Total_New_Capacity"]      = pd.to_numeric(df["Total_New_Capacity"], errors='coerce').fillna(0)
+df["CapacityFactor"]          = pd.to_numeric(df["CapacityFactor"], errors='coerce').fillna(0)
+df["Recommended_WT_Capacity"] = pd.to_numeric(df.get("Recommended_WT_Capacity", 0),
+                                               errors='coerce')  # leave NaN for now
+
+#%% Read old file and prepare for merge
+df_old = pd.read_excel(old_excel_path, index_col=0)
+# ensure we have a numeric Annual_Energy_TWh in the old sheet
+df_old["Annual_Energy_TWh"] = pd.to_numeric(df_old["Annual_Energy_TWh"], errors='coerce').fillna(0)
+
+#%% Join old annual‐energy into main df
+# this will create a helper column 'Annual_Energy_TWh_old'
+df = df.join(
+    df_old[["Annual_Energy_TWh"]]
+    .rename(columns={"Annual_Energy_TWh": "Annual_Energy_TWh_old"}),
+    how="left"
+)
+
+#%% Fill missing Recommended_WT_Capacity from old Annual_Energy_TWh
+df["Recommended_WT_Capacity"] = df["Recommended_WT_Capacity"].fillna(
+    df["Annual_Energy_TWh_old"]
+)
+
+# (optional) drop the helper column
+df = df.drop(columns="Annual_Energy_TWh_old")
 
 #%% Compute Annual Energy Production
 hours_per_year = 8760
@@ -29,19 +53,22 @@ print(f"Energy yield data for every park saved to: {output_yield_file}")
 energy_by_country   = df.groupby("Country")["Annual_Energy_TWh"].sum().reset_index()
 capacity_by_country = df.groupby("Country")["Total_New_Capacity"].sum().reset_index()
 
-combined = pd.merge(energy_by_country, capacity_by_country, on="Country")
-combined = combined.sort_values(by="Annual_Energy_TWh", ascending=False).reset_index(drop=True)
+combined = pd.merge(energy_by_country,
+                    capacity_by_country,
+                    on="Country")
+combined = combined.sort_values(by="Annual_Energy_TWh",
+                                ascending=False).reset_index(drop=True)
+
 print("Combined aggregated data (per country):")
 print(combined)
 
-#%% Plot 1: Dual-axis Bar Chart with custom colors
+#%% Plot 1: Dual-axis Bar Chart
 x     = np.arange(len(combined))
 width = 0.35
 
 fig, ax1 = plt.subplots(figsize=(12, 8))
 ax2      = ax1.twinx()
 
-# Annual Energy in blue
 bars1 = ax1.bar(
     x - width/2,
     combined['Annual_Energy_TWh'],
@@ -49,7 +76,6 @@ bars1 = ax1.bar(
     color='blue',
     label='Annual Energy (TWh)'
 )
-# Installed Capacity in red
 bars2 = ax2.bar(
     x + width/2,
     combined['Total_New_Capacity'],
@@ -77,14 +103,14 @@ plt.savefig(dual_axis_chart_path, dpi=300)
 print(f"Dual-axis chart saved to: {dual_axis_chart_path}")
 plt.show()
 
-#%% Plot 2: Pie Chart (sorted, stacked labels, smaller text)
+#%% Plot 2: Pie Chart of Energy Shares
 # Calculate share
 total_energy = energy_by_country["Annual_Energy_TWh"].sum()
 energy_by_country["Share"] = energy_by_country["Annual_Energy_TWh"] / total_energy
 
 # Split large vs small
 above = energy_by_country[energy_by_country["Share"] >= 0.01].copy()
-below = energy_by_country[energy_by_country["Share"] < 0.01].copy()
+below = energy_by_country[energy_by_country["Share"] <  0.01].copy()
 
 if not below.empty:
     other_total = below["Annual_Energy_TWh"].sum()
@@ -92,16 +118,19 @@ if not below.empty:
         "Country": ["Other"],
         "Annual_Energy_TWh": [other_total]
     })
-    plot_df = pd.concat([above[["Country", "Annual_Energy_TWh"]], other_row], ignore_index=True)
+    plot_df = pd.concat([above[["Country", "Annual_Energy_TWh"]],
+                         other_row],
+                        ignore_index=True)
 else:
     plot_df = above[["Country", "Annual_Energy_TWh"]]
 
-# Sort descending so slices go largest→smallest
-plot_df = plot_df.sort_values("Annual_Energy_TWh", ascending=False).reset_index(drop=True)
+# Sort descending
+plot_df = plot_df.sort_values("Annual_Energy_TWh",
+                              ascending=False).reset_index(drop=True)
 
-# Prepare sizes and stacked labels
-sizes = plot_df["Annual_Energy_TWh"]
-labels = plot_df["Country"]
+# Prepare labels
+sizes       = plot_df["Annual_Energy_TWh"]
+labels      = plot_df["Country"]
 percentages = sizes / sizes.sum() * 100
 labels_with_pct = [f"{lbl}\n{pct:.1f}%" for lbl, pct in zip(labels, percentages)]
 
@@ -116,8 +145,8 @@ plt.pie(
     sizes,
     labels=labels_with_pct,
     labeldistance=1.05,
-    startangle=90,          # largest slice at 12 o'clock
-    counterclock=False,     # clockwise in descending order
+    startangle=90,
+    counterclock=False,
     colors=colors,
     textprops={'fontsize': 8}
 )

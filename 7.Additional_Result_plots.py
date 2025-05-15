@@ -1,141 +1,102 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import math
-import re
 from pathlib import Path
 
 # Set up base directory and subdirectories
 base_dir = Path(__file__).resolve().parent
 results_dir = base_dir / "results"
 
-
-# Define file paths for each approach using relative paths
+# Define file paths for each approach
 files = {
     "Approach 1": results_dir / "Approach_1.xlsx",
     "Approach 2": results_dir / "Approach_2.xlsx",
     "Approach 3": results_dir / "Approach_3.xlsx",
-    "Approach 4": results_dir / "Approach_4.xlsx"
+    "Approach 4": results_dir / "Approach_4.xlsx",
+    "Approach 5": results_dir / "Approach_5.xlsx",
 }
 
-# Define labels for approaches for plot legends
-approach_labels = {1: "Approach 1", 2: "Approach 2", 3: "Approach 3", 4: "Approach 4"}
+# Define colors for line-chart combined series
+colors = {
+    'Approach 1': 'blue',
+    'Approach 2': 'green',
+    'Approach 3': 'red',
+    'Approach 4': 'purple',
+    'Approach 5': 'orange'
+}
 
+# Function to compute baseline and combined (repowered) time series
 
-
-# SECTION 1: LINE CHART – CAPACITY 2000–2050
 def compute_lines(file_path):
-    # Read data from Excel file
     df = pd.read_excel(file_path)
-
-    # Clean key columns
+    # Clean columns
     for col in ['Commissioning date', 'Decommissioning date', 'Total power', 'Total_New_Capacity']:
         if col in df.columns:
             df[col] = df[col].replace(['#ND', ''], np.nan)
-        else:
-            print(f"Warning: Column '{col}' not found in the Excel file.")
-
-    # Convert data types
+    # Convert types
     df['Commissioning date'] = pd.to_datetime(df['Commissioning date'], errors='coerce')
     df['Decommissioning date'] = pd.to_datetime(df['Decommissioning date'], errors='coerce')
     df['Total power'] = pd.to_numeric(df['Total power'], errors='coerce')
     df['Total_New_Capacity'] = pd.to_numeric(df['Total_New_Capacity'], errors='coerce')
-
-    # PART A: Baseline capacity changes
-    capacity_changes_hist = {}
-
-    def add_change(year, change):
-        capacity_changes_hist[year] = capacity_changes_hist.get(year, 0) + change
-
+    # Baseline changes
+    cap_changes = {}
+    rep_changes = {}
+    def add(dic, year, val): dic[year] = dic.get(year, 0) + val
     for _, row in df.iterrows():
-        comm = row['Commissioning date']
-        tot_power = row['Total power']
-        if pd.isna(comm) or pd.isna(tot_power):
-            continue
-        start_year = comm.year
-        if pd.isna(row['Decommissioning date']):
-            end_year = start_year + 30
-        else:
-            end_year = row['Decommissioning date'].year
-        add_change(start_year, tot_power)
-        add_change(end_year, -tot_power)
-
-    hist_capacity = {}
-    running_sum = 0.0
+        if pd.notna(row['Commissioning date']) and pd.notna(row['Total power']):
+            start = row['Commissioning date'].year
+            end = row['Decommissioning date'].year if pd.notna(row['Decommissioning date']) else start + 30
+            add(cap_changes, start, row['Total power'])
+            add(cap_changes, end, -row['Total power'])
+        if pd.notna(row['Commissioning date']) and pd.notna(row['Total_New_Capacity']):
+            rep_start = row['Decommissioning date'].year if pd.notna(row['Decommissioning date']) else row['Commissioning date'].year + 20
+            cap = row['Total_New_Capacity']
+            year = rep_start
+            while year <= 2050:
+                add(rep_changes, year, cap)
+                add(rep_changes, year + 20, -cap)
+                year += 20
+    # Build baseline
+    hist_baseline = {}
+    running = 0.0
     for y in range(1980, 2023):
-        if y in capacity_changes_hist:
-            running_sum += capacity_changes_hist[y]
-        hist_capacity[y] = running_sum
-
-    base_growth = {}
-    for y in range(2000, 2023):
-        base_growth[y] = hist_capacity[y]
-    if 2000 in hist_capacity and 2022 in hist_capacity:
-        growth_per_year = (hist_capacity[2022] - hist_capacity[2000]) / (2022 - 2000)
+        running += cap_changes.get(y, 0)
+        hist_baseline[y] = running
+    # Linear trend beyond 2022
+    if 2000 in hist_baseline and 2022 in hist_baseline:
+        trend = (hist_baseline[2022] - hist_baseline[2000]) / 22
     else:
-        growth_per_year = 0
+        trend = 0
     for y in range(2023, 2051):
-        base_growth[y] = hist_capacity[2022] + growth_per_year * (y - 2022)
-
-    # PART B: Repowering increments
-    repower_changes = {}
-
-    def add_repower_change(year, change):
-        repower_changes[year] = repower_changes.get(year, 0) + change
-
-    for _, row in df.iterrows():
-        comm = row['Commissioning date']
-        repower_cap = row['Total_New_Capacity']
-        if pd.isna(comm) or pd.isna(repower_cap):
-            continue
-        if pd.isna(row['Decommissioning date']):
-            decomm_year = comm.year + 20
-        else:
-            decomm_year = row['Decommissioning date'].year
-        repower_start = decomm_year
-        FINAL_YEAR = 2050
-        while repower_start <= FINAL_YEAR:
-            add_repower_change(repower_start, repower_cap)
-            repower_end = repower_start + 20
-            add_repower_change(repower_end, -repower_cap)
-            repower_start = repower_end
-
-    repower_line = {}
-    running_sum = 0.0
+        hist_baseline[y] = hist_baseline[2022] + trend * (y - 2022)
+    # Build repowered series
+    hist_repower = {}
+    running = 0.0
     for y in range(1980, 2051):
-        if y in repower_changes:
-            running_sum += repower_changes[y]
-        repower_line[y] = running_sum
+        running += rep_changes.get(y, 0)
+        hist_repower[y] = running
+    # Extract series
+    years = list(range(2000, 2051))
+    baseline = [hist_baseline[y] for y in years]
+    combined = [hist_baseline[y] + hist_repower.get(y, 0) for y in years]
+    return years, baseline, combined
 
-    # PART C: Combined capacity = baseline + repowering
-    combined_line = {}
-    for y in range(2000, 2051):
-        combined_line[y] = base_growth[y] + repower_line.get(y, 0)
-
-    years_list = list(range(2000, 2051))
-    baseline_line = [base_growth[y] for y in years_list]
-    combined = [combined_line[y] for y in years_list]
-
-    return years_list, baseline_line, combined
-
-
-# Compute baseline and combined capacities for the line chart using one approach (e.g., Approach 1)
-years, baseline_mw, _ = compute_lines(files["Approach 1"])
+# SECTION 1: LINE CHART – CAPACITY 2000–2050
 combined_results = {}
-for name, file_path in files.items():
-    _, _, combined_mw = compute_lines(file_path)
-    combined_results[name] = combined_mw
+for name, path in files.items():
+    years, base, comb = compute_lines(path)
+    combined_results[name] = {'years': years, 'baseline': base, 'combined': comb}
 
 plt.figure(figsize=(12, 8))
-baseline_gw = [v / 1000.0 for v in baseline_mw]
-years_plot = years
-
-plt.plot(years_plot, baseline_gw, color="black", linestyle="dashed", label="Baseline (Base Growth)")
-colors = {'Approach 1': 'blue', 'Approach 2': 'green', 'Approach 3': 'red', 'Approach 4': 'purple'}
-for name, combined_mw in combined_results.items():
-    combined_gw = [v / 1000.0 for v in combined_mw]
-    plt.plot(years_plot, combined_gw, color=colors[name], linestyle="solid", label=f"{name} Combined")
-
+# Plot baseline dashed
+plt.plot(combined_results['Approach 1']['years'],
+         [v / 1000 for v in combined_results['Approach 1']['baseline']],
+         color='black', linestyle='dashed', label='Baseline')
+# Plot combined for each approach
+for name in ['Approach 1', 'Approach 2', 'Approach 3', 'Approach 4', 'Approach 5']:
+    plt.plot(combined_results[name]['years'],
+             [v / 1000 for v in combined_results[name]['combined']],
+             color=colors[name], label=f"{name} Combined")
 plt.title("Capacity 2000–2050 Comparison: Baseline vs. Repowered per Approach", fontsize=16, fontweight='bold')
 plt.xlabel("Year", fontsize=14)
 plt.ylabel("Capacity (GW)", fontsize=14)
@@ -144,244 +105,178 @@ plt.grid(True)
 plt.tight_layout()
 plt.show()
 
-
-# SECTION 2: HORIZONTAL BAR CHART – REPOWERED POWER DENSITY (Only for Approach 3)
-repowered_df = pd.read_excel(files["Approach 3"])
-cols_to_clean = ['Country', 'Commissioning date', 'Decommissioning date', 'Total_New_Capacity',
-                 'New_Total_Park_Area (m²)']
-for col in cols_to_clean:
-    if col in repowered_df.columns:
-        repowered_df[col] = repowered_df[col].replace(['#ND', ''], np.nan)
-    else:
-        print(f"Warning: Column '{col}' not found in Approach 3 data.")
-
-if 'Commissioning date' in repowered_df.columns:
-    repowered_df['Commissioning date'] = pd.to_datetime(repowered_df['Commissioning date'], errors='coerce')
-if 'Decommissioning date' in repowered_df.columns:
-    repowered_df['Decommissioning date'] = pd.to_datetime(repowered_df['Decommissioning date'], errors='coerce')
-if 'Total_New_Capacity' in repowered_df.columns:
-    repowered_df['Total_New_Capacity'] = pd.to_numeric(repowered_df['Total_New_Capacity'], errors='coerce')
-if 'New_Total_Park_Area (m²)' in repowered_df.columns:
-    repowered_df['New_Total_Park_Area (m²)'] = pd.to_numeric(repowered_df['New_Total_Park_Area (m²)'], errors='coerce')
-
-repowered_df = repowered_df[repowered_df['Total_New_Capacity'] > 0]
-grouped_rep = repowered_df.groupby('Country').agg({
+# SECTION 2: HORIZONTAL BAR CHART – REPOWERED POWER DENSITY (Approach 5)
+rep5 = pd.read_excel(files['Approach 5']).replace({'#ND': np.nan, '': np.nan})
+# Clean and convert
+rep5['Commissioning date'] = pd.to_datetime(rep5.get('Commissioning date'), errors='coerce')
+rep5['Decommissioning date'] = pd.to_datetime(rep5.get('Decommissioning date'), errors='coerce')
+rep5['Total_New_Capacity'] = pd.to_numeric(rep5.get('Total_New_Capacity'), errors='coerce')
+rep5['New_Total_Park_Area (m²)'] = pd.to_numeric(rep5.get('New_Total_Park_Area (m²)'), errors='coerce')
+rep5 = rep5[rep5['Total_New_Capacity'] > 0]
+# Aggregate and compute density
+group5 = rep5.groupby('Country').agg({
     'Total_New_Capacity': 'sum',
     'New_Total_Park_Area (m²)': 'sum'
 }).reset_index()
-
-grouped_rep['Repowered Power Density (MW/km²)'] = (
-        grouped_rep['Total_New_Capacity'] / (grouped_rep['New_Total_Park_Area (m²)'] / 1e6)
-)
-
-grouped_rep = grouped_rep.sort_values('Repowered Power Density (MW/km²)', ascending=False)
+group5['Repowered Power Density (MW/km²)'] = group5['Total_New_Capacity'] / (group5['New_Total_Park_Area (m²)'] / 1e6)
+group5 = group5.sort_values('Repowered Power Density (MW/km²)', ascending=False)
 
 plt.figure(figsize=(12, 8))
-plt.barh(grouped_rep['Country'], grouped_rep['Repowered Power Density (MW/km²)'],
-         color=plt.cm.viridis(np.linspace(0, 1, len(grouped_rep))))
-plt.title("Repowered Power Density per Country (Approach 3)", fontsize=16, fontweight='bold')
+plt.barh(group5['Country'], group5['Repowered Power Density (MW/km²)'],
+         color=plt.cm.viridis(np.linspace(0, 1, len(group5))))
+plt.title("Repowered Power Density per Country (Approach 5)", fontsize=16, fontweight='bold')
 plt.xlabel("Repowered Power Density (MW/km²)", fontsize=14)
 plt.ylabel("Country", fontsize=14)
-plt.ticklabel_format(style='plain', axis='x')
 plt.gca().invert_yaxis()
 plt.tight_layout()
 plt.show()
 
-# SECTION 3: COMPARISON – ORIGINAL vs. REPOWERED POWER DENSITY (Approach 3)
-original_df = pd.read_excel(files["Approach 3"])
-cols_to_clean_orig = ['Country', 'Total power', 'Total Park Area (m²)']
-for col in cols_to_clean_orig:
-    if col in original_df.columns:
-        original_df[col] = original_df[col].replace(['#ND', ''], np.nan)
-    else:
-        print(f"Warning: Column '{col}' not found for original data.")
-if 'Total power' in original_df.columns:
-    original_df['Total power'] = pd.to_numeric(original_df['Total power'], errors='coerce')
-if 'Total Park Area (m²)' in original_df.columns:
-    original_df['Total Park Area (m²)'] = pd.to_numeric(original_df['Total Park Area (m²)'], errors='coerce')
-
-original_df = original_df[(original_df['Total power'] > 0) & (original_df['Total Park Area (m²)'] > 0)]
-grouped_orig = original_df.groupby('Country').agg({
+# SECTION 3: COMPARISON – ORIGINAL vs. REPOWERED POWER DENSITY (Approach 5)
+orig5 = pd.read_excel(files['Approach 5']).replace({'#ND': np.nan, '': np.nan})
+# Clean and convert
+orig5['Total power'] = pd.to_numeric(orig5.get('Total power'), errors='coerce')
+orig5['Total Park Area (m²)'] = pd.to_numeric(orig5.get('Total Park Area (m²)'), errors='coerce')
+orig5 = orig5[(orig5['Total power'] > 0) & (orig5['Total Park Area (m²)'] > 0)]
+# Aggregate and compute densities
+group_o5 = orig5.groupby('Country').agg({
     'Total power': 'sum',
     'Total Park Area (m²)': 'sum'
 }).reset_index()
-grouped_orig['Original Power Density (MW/km²)'] = (
-        grouped_orig['Total power'] / (grouped_orig['Total Park Area (m²)'] / 1e6)
+group_o5['Original Power Density (MW/km²)'] = (
+    group_o5['Total power'] / (group_o5['Total Park Area (m²)'] / 1e6)
 )
+# Merge and plot
+compare5 = pd.merge(
+    group_o5[['Country', 'Original Power Density (MW/km²)']],
+    group5[['Country', 'Repowered Power Density (MW/km²)']],
+    on='Country', how='outer'
+).fillna(0)
+compare5 = compare5.sort_values('Repowered Power Density (MW/km²)', ascending=False)
 
-compare_df = pd.merge(grouped_orig[['Country', 'Original Power Density (MW/km²)']],
-                      grouped_rep[['Country', 'Repowered Power Density (MW/km²)']],
-                      on='Country', how='outer').fillna(0)
-compare_df = compare_df.sort_values('Repowered Power Density (MW/km²)', ascending=False)
-
-countries = compare_df['Country']
+countries = compare5['Country']
 y_pos = np.arange(len(countries))
-bar_height = 0.35
 
 plt.figure(figsize=(12, 8))
-plt.barh(y_pos - bar_height / 2, compare_df['Original Power Density (MW/km²)'], height=bar_height,
-         label='Original', color='skyblue')
-plt.barh(y_pos + bar_height / 2, compare_df['Repowered Power Density (MW/km²)'], height=bar_height,
-         label='Repowered', color='salmon')
-plt.yticks(y_pos, countries, fontsize=12)
+plt.barh(y_pos - 0.2, compare5['Original Power Density (MW/km²)'], height=0.4, label='Original')
+plt.barh(y_pos + 0.2, compare5['Repowered Power Density (MW/km²)'], height=0.4, label='Repowered')
+plt.yticks(y_pos, countries)
 plt.xlabel("Power Density (MW/km²)", fontsize=14)
-plt.title("Comparison: Original vs. Repowered Power Density per Country (Approach 3)",
-          fontsize=16, fontweight='bold')
+plt.title("Comparison: Original vs. Repowered Power Density per Country (Approach 5)", fontsize=16, fontweight='bold')
 plt.legend()
 plt.tight_layout()
 plt.show()
 
+# SECTION 4: 2050 COUNTRY LAND AREA COMPARISON – STACKED BARS (Approaches 2, 3 & 5)
 
-
-# SECTION 4: 2050 COUNTRY LAND AREA COMPARISON – STACKED BARS
 def compute_country_capacities(file_path):
-    """
-    Compute the 2050 capacity for each country for:
-      - Baseline (original) scenario
-      - Combined (baseline plus repowering increments) scenario
-    Returns a DataFrame with columns: Country, Baseline_2050, Combined_2050.
-    """
-    df = pd.read_excel(file_path)
-    # Clean key columns
-    for col in ['Country', 'Commissioning date', 'Decommissioning date', 'Total power', 'Total_New_Capacity']:
-        if col in df.columns:
-            df[col] = df[col].replace(['#ND', ''], np.nan)
-        else:
-            print(f"Warning: Column '{col}' not found in the Excel file.")
-    df['Commissioning date'] = pd.to_datetime(df['Commissioning date'], errors='coerce')
-    df['Decommissioning date'] = pd.to_datetime(df['Decommissioning date'], errors='coerce')
-    df['Total power'] = pd.to_numeric(df['Total power'], errors='coerce')
-    df['Total_New_Capacity'] = pd.to_numeric(df['Total_New_Capacity'], errors='coerce')
-
+    df = pd.read_excel(file_path).replace({'#ND': np.nan, '': np.nan})
+    df['Commissioning date'] = pd.to_datetime(df.get('Commissioning date'), errors='coerce')
+    df['Decommissioning date'] = pd.to_datetime(df.get('Decommissioning date'), errors='coerce')
+    df['Total power'] = pd.to_numeric(df.get('Total power'), errors='coerce')
+    df['Total_New_Capacity'] = pd.to_numeric(df.get('Total_New_Capacity'), errors='coerce')
     countries = df['Country'].dropna().unique()
-    results = []
+    records = []
     for country in countries:
         sub = df[df['Country'] == country]
-        capacity_changes_hist = {}
-        repower_changes = {}
-
-        def add_change(year, change, dic):
-            dic[year] = dic.get(year, 0) + change
-
-        # Process each record for this country
-        for _, row in sub.iterrows():
-            comm = row['Commissioning date']
-            tot_power = row['Total power']
-            if pd.isna(comm) or pd.isna(tot_power):
-                continue
-            start_year = comm.year
-            if pd.isna(row['Decommissioning date']):
-                end_year = start_year + 30
-            else:
-                end_year = row['Decommissioning date'].year
-            add_change(start_year, tot_power, capacity_changes_hist)
-            add_change(end_year, -tot_power, capacity_changes_hist)
-
-            repower_cap = row['Total_New_Capacity']
-            if pd.isna(comm) or pd.isna(repower_cap):
-                continue
-            if pd.isna(row['Decommissioning date']):
-                decomm_year = comm.year + 20
-            else:
-                decomm_year = row['Decommissioning date'].year
-            repower_start = decomm_year
-            FINAL_YEAR = 2050
-            while repower_start <= FINAL_YEAR:
-                add_change(repower_start, repower_cap, repower_changes)
-                repower_end = repower_start + 20
-                add_change(repower_end, -repower_cap, repower_changes)
-                repower_start = repower_end
-
-        # Build cumulative baseline capacity from 1980 to 2022
-        baseline = {}
-        running_sum = 0.0
-        for y in range(1980, 2023):
-            if y in capacity_changes_hist:
-                running_sum += capacity_changes_hist[y]
-            baseline[y] = running_sum
-        if 2000 in baseline and 2022 in baseline:
-            growth_per_year = (baseline[2022] - baseline[2000]) / (2022 - 2000)
-        else:
-            growth_per_year = 0
-        for y in range(2023, 2051):
-            baseline[y] = baseline[2022] + growth_per_year * (y - 2022)
-        baseline_2050 = baseline[2050]
-
-        # Build cumulative repowering increments from 1980 to 2050
-        repowering = {}
-        running_sum = 0.0
-        for y in range(1980, 2051):
-            if y in repower_changes:
-                running_sum += repower_changes[y]
-            repowering[y] = running_sum
-
-        # Combined scenario = baseline + repowering
-        combined = {}
-        for y in range(2000, 2051):
-            combined[y] = baseline[y] + repowering.get(y, 0)
-        combined_2050 = combined[2050]
-
-        results.append({'Country': country, 'Baseline_2050': baseline_2050, 'Combined_2050': combined_2050})
-    return pd.DataFrame(results)
+        base_changes = {};
+        rep_changes = {};
+        def add(dic, year, val): dic[year] = dic.get(year, 0) + val
+        for _, r in sub.iterrows():
+            if pd.notna(r['Commissioning date']) and pd.notna(r['Total power']):
+                s = r['Commissioning date'].year
+                e = r['Decommissioning date'].year if pd.notna(r['Decommissioning date']) else s + 30
+                add(base_changes, s, r['Total power']); add(base_changes, e, -r['Total power'])
+            if pd.notna(r['Commissioning date']) and pd.notna(r['Total_New_Capacity']):
+                s2 = r['Decommissioning date'].year if pd.notna(r['Decommissioning date']) else r['Commissioning date'].year + 20
+                cap2 = r['Total_New_Capacity']; year = s2
+                while year <= 2050:
+                    add(rep_changes, year, cap2); add(rep_changes, year + 20, -cap2); year += 20
+        # baseline cumulative
+        hist = {}; run = 0.0
+        for y in range(1980, 2023): run += base_changes.get(y, 0); hist[y] = run
+        growth = ((hist[2022] - hist[2000]) / 22) if 2000 in hist and 2022 in hist else 0
+        for y in range(2023, 2051): hist[y] = hist[2022] + growth * (y - 2022)
+        base_2050 = hist[2050]
+        # repowered cumulative
+        run = 0.0; rep_hist = {}
+        for y in range(1980, 2051): run += rep_changes.get(y, 0); rep_hist[y] = run
+        combined_2050 = base_2050 + rep_hist[2050]
+        records.append({'Country': country, 'Baseline_2050': base_2050, 'Combined_2050': combined_2050})
+    return pd.DataFrame(records)
 
 
-def compute_land_area_data(file_path):
-    """
-    Computes the land area data for each country for a given approach.
-    Returns a DataFrame with columns: Country, Baseline Land Area (km²), Repowered Land Area (km²).
-    """
-    cap_df = compute_country_capacities(file_path)
-    cap_df['Repowered Capacity (MW)'] = cap_df['Combined_2050'] - cap_df['Baseline_2050']
-    orig_df = pd.read_excel(file_path)
-    cols_to_clean_orig = ['Country', 'Total power', 'Total Park Area (m²)']
-    for col in cols_to_clean_orig:
-        if col in orig_df.columns:
-            orig_df[col] = orig_df[col].replace(['#ND', ''], np.nan)
-        else:
-            print(f"Warning: Column '{col}' not found for original data.")
-    orig_df['Total power'] = pd.to_numeric(orig_df['Total power'], errors='coerce')
-    orig_df['Total Park Area (m²)'] = pd.to_numeric(orig_df['Total Park Area (m²)'], errors='coerce')
-    orig_df = orig_df[(orig_df['Total power'] > 0) & (orig_df['Total Park Area (m²)'] > 0)]
-    grouped_orig = orig_df.groupby('Country').agg({
-        'Total power': 'sum',
-        'Total Park Area (m²)': 'sum'
-    }).reset_index()
-    grouped_orig['Original Power Density (MW/km²)'] = (
-            grouped_orig['Total power'] / (grouped_orig['Total Park Area (m²)'] / 1e6)
-    )
-    merged_df = pd.merge(cap_df, grouped_orig[['Country', 'Original Power Density (MW/km²)']],
-                         on='Country', how='left')
-    merged_df['Baseline Land Area (km²)'] = merged_df['Baseline_2050'] / merged_df['Original Power Density (MW/km²)']
-    merged_df['Repowered Land Area (km²)'] = merged_df['Repowered Capacity (MW)'] / merged_df[
-        'Original Power Density (MW/km²)']
-    return merged_df[['Country', 'Baseline Land Area (km²)', 'Repowered Land Area (km²)']]
+# Loop over all approaches and plot one figure each
+for i in range(1, 6):
+    file_i = results_dir / f"Approach_{i}.xlsx"
+    caps = compute_country_capacities(file_i)
 
+    # Sort by combined capacity descending
+    caps = caps.sort_values('Combined_2050', ascending=False).reset_index(drop=True)
 
-# Compute land area data for Approach 2 and Approach 3 using relative paths
-land_data_2 = compute_land_area_data(files["Approach 2"])
-land_data_3 = compute_land_area_data(files["Approach 3"])
-land_compare = pd.merge(land_data_2, land_data_3, on='Country', how='outer', suffixes=('_2', '_3')).fillna(0)
-land_compare['Total_Area_2'] = land_compare['Baseline Land Area (km²)_2'] + land_compare['Repowered Land Area (km²)_2']
-land_compare = land_compare.sort_values('Total_Area_2', ascending=False)
+    countries = caps['Country']
+    x = np.arange(len(countries))
+    width = 0.35
 
-countries = land_compare['Country']
-x = np.arange(len(countries))
-width = 0.35
+    plt.figure(figsize=(12, 8))
+    plt.bar(x - width / 2, caps['Baseline_2050'], width, label='Baseline')
+    plt.bar(x + width / 2, caps['Combined_2050'], width, label='Combined')
+    plt.xticks(x, countries, rotation=45, ha='right', fontsize=12)
+    plt.ylabel('Capacity (MW)', fontsize=14)
+    plt.title(f'Approach {i}: Baseline vs Combined Capacity per Country (2050)',
+              fontsize=16, fontweight='bold')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+# Compute land area per approach
 
+def compute_land_area(approach):
+    caps = compute_country_capacities(files[f'Approach {approach}'])
+    caps['Repowered Capacity (MW)'] = caps['Combined_2050'] - caps['Baseline_2050']
+    orig = pd.read_excel(files[f'Approach {approach}']).replace({'#ND': np.nan, '': np.nan})
+    orig['Total power'] = pd.to_numeric(orig.get('Total power'), errors='coerce')
+    orig['Total Park Area (m²)'] = pd.to_numeric(orig.get('Total Park Area (m²)'), errors='coerce')
+    orig = orig[(orig['Total power'] > 0) & (orig['Total Park Area (m²)'] > 0)]
+    grp = orig.groupby('Country').agg({'Total power':'sum','Total Park Area (m²)':'sum'}).reset_index()
+    grp['Orig Density'] = grp['Total power']/(grp['Total Park Area (m²)']/1e6)
+    merged = pd.merge(caps, grp[['Country','Orig Density']], on='Country', how='left')
+    merged['Baseline Area'] = merged['Baseline_2050']/merged['Orig Density']
+    merged['Repowered Area'] = merged['Repowered Capacity (MW)']/merged['Orig Density']
+    return merged[['Country','Baseline Area','Repowered Area']]
+
+land2 = compute_land_area(2)
+land3 = compute_land_area(3)
+land5 = compute_land_area(5)
+
+# Merge data for approaches 2,3,5
+cmp = land2.merge(land3, on='Country', how='outer', suffixes=('_2','_3')) \
+          .merge(land5.rename(columns={'Baseline Area':'Baseline_5','Repowered Area':'Repowered_5'}), on='Country', how='outer')
+cmp.fillna(0, inplace=True)
+cmp['Total_2'] = cmp['Baseline Area_2'] + cmp['Repowered Area_2']
+cmp.sort_values('Total_2', ascending=False, inplace=True)
+
+# Plot: uniform baseline color, distinct repowered per approach
+countries = cmp['Country']
+idx = np.arange(len(countries))
+width = 0.2
 plt.figure(figsize=(14, 8))
-plt.bar(x - width / 2, land_compare['Baseline Land Area (km²)_2'], width,
-        label='Approach 2 Baseline', color='slateblue')
-plt.bar(x - width / 2, land_compare['Repowered Land Area (km²)_2'], width,
-        bottom=land_compare['Baseline Land Area (km²)_2'], label='Approach 2 Repowered', color='mediumseagreen')
-plt.bar(x + width / 2, land_compare['Baseline Land Area (km²)_3'], width,
-        label='Approach 3 Baseline', color='darkorange')
-plt.bar(x + width / 2, land_compare['Repowered Land Area (km²)_3'], width,
-        bottom=land_compare['Baseline Land Area (km²)_3'], label='Approach 3 Repowered', color='tomato')
-plt.xticks(x, countries, rotation=45, ha='right', fontsize=12)
+
+# Baseline bars in light gray
+plt.bar(idx - width, cmp['Baseline Area_2'], width, color='lightgray', label='Baseline')
+plt.bar(idx, cmp['Baseline Area_3'], width, color='lightgray')
+plt.bar(idx + width, cmp['Baseline_5'], width, color='lightgray')
+
+# Repowered bars
+plt.bar(idx - width, cmp['Repowered Area_2'], width,
+        bottom=cmp['Baseline Area_2'], color='green', label='Approach 2 Repowered')
+plt.bar(idx, cmp['Repowered Area_3'], width,
+        bottom=cmp['Baseline Area_3'], color='red', label='Approach 3 Repowered')
+plt.bar(idx + width, cmp['Repowered_5'], width,
+        bottom=cmp['Baseline_5'], color='orange', label='Approach 5 Repowered')
+
+plt.xticks(idx, countries, rotation=45, ha='right', fontsize=12)
 plt.xlabel("Country", fontsize=14)
 plt.ylabel("Land Area (km²)", fontsize=14)
-plt.title("Required Land Area Comparison (Approaches 2 & 3)\nStacked: Baseline vs. Repowered", fontsize=16,
-          fontweight='bold')
+plt.title("Required Land Area Comparison (Approaches 2, 3 & 5)\nStacked: Baseline vs. Repowered", fontsize=16, fontweight='bold')
 plt.legend()
 plt.tight_layout()
 plt.show()
