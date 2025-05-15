@@ -189,3 +189,86 @@ ax.add_artist(leg1)
 
 plt.tight_layout()
 plt.show()
+
+
+# ─── PLOT 4: AVG LCOE PER COUNTRY (MODERATE 14%) ────────────────────────────
+# Group by country and compute mean LCOEs
+country_stats = (
+    moderate
+    .groupby('Country')[['LCOE_Repowering','LCOE_Decommissioning']]
+    .mean()
+    .reset_index()
+    .sort_values('LCOE_Repowering', ascending=False)  # optional: order by repowering
+)
+
+# Bar chart
+plt.figure(figsize=(12, 6))
+x = np.arange(len(country_stats))
+width = 0.35
+
+plt.bar(x - width/2, country_stats['LCOE_Repowering'], width, label='Repowering')
+plt.bar(x + width/2, country_stats['LCOE_Decommissioning'], width, label='Decommissioning')
+
+plt.xticks(x, country_stats['Country'], rotation=45, ha='right')
+plt.ylabel('Average LCOE (€/MWh)')
+plt.title('Average LCOE per Country (Moderate 14% Learning Scenario)')
+plt.legend()
+plt.grid(axis='y', linestyle='--', alpha=0.5)
+plt.tight_layout()
+plt.show()
+
+
+
+# ─── PLOT 5: BOX PLOT PER COUNTRY (SORTED) ───────────────────────────────────
+# 1) Determine sort order by mean repowering LCOE
+country_order = (
+    moderate
+    .groupby('Country')['LCOE_Repowering']
+    .mean()
+    .sort_values(ascending=False)  # change to True for lowest→highest
+    .index
+    .tolist()
+)
+
+# 2) Prepare boxplot data in that order
+width = 0.35
+box_data = []
+positions = []
+colors = []
+
+for i, country in enumerate(country_order):
+    rep = moderate.loc[moderate['Country'] == country, 'LCOE_Repowering'].dropna()
+    dec = moderate.loc[moderate['Country'] == country, 'LCOE_Decommissioning'].dropna()
+    box_data.extend([rep, dec])
+    positions.extend([i - width/2, i + width/2])
+    colors.extend(['skyblue', 'orange'])
+
+# 3) Plot
+fig, ax = plt.subplots(figsize=(15, 7))
+bp = ax.boxplot(
+    box_data,
+    positions=positions,
+    widths=width,
+    patch_artist=True,
+    showfliers=False
+)
+
+# 4) Color the boxes
+for patch, c in zip(bp['boxes'], colors):
+    patch.set_facecolor(c)
+
+# 5) Labels and legend
+ax.set_xticks(np.arange(len(country_order)))
+ax.set_xticklabels(country_order, rotation=90, ha='center')
+ax.set_ylabel('LCOE (€/MWh)')
+ax.set_title('LCOE Distribution per Country (Moderate 14% Learning Scenario)\n(sorted by mean Repowering LCOE)')
+
+legend_patches = [
+    mpatches.Patch(facecolor='skyblue', label='Repowering'),
+    mpatches.Patch(facecolor='orange', label='Decommissioning')
+]
+ax.legend(handles=legend_patches, title='Strategy', loc='upper right')
+
+ax.grid(axis='y', linestyle='--', alpha=0.5)
+plt.tight_layout()
+plt.show()

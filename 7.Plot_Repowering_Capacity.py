@@ -15,11 +15,11 @@ file_approach_4 = results_dir / "Approach_4.xlsx"
 file_approach_5 = results_dir / "Approach_5.xlsx"
 
 approaches = {
-    "Approach 1": file_approach_1,
-    "Approach 2": file_approach_2,
-    "Approach 3": file_approach_3,
-    "Approach 4": file_approach_4,
-    "Approach 5": file_approach_5,
+    "Approach 1-Power Density": file_approach_1,
+    "Approach 2-Capacity Maximization": file_approach_2,
+    "Approach 3-Rounding Up": file_approach_3,
+    "Approach 4-Single TUrbine Flex": file_approach_4,
+    "Approach 5-No-Loss Hybrid": file_approach_5,
 }
 
 years = pd.date_range(start='2000', end='2050', freq='YE')
@@ -150,12 +150,13 @@ decom_growth_dict = {}
 repower_growth_dict = {}
 year_range = np.arange(2022, 2043)
 
+# Consistent color mapping for approaches
 approach_colors = {
-    "Approach 1": "blue",
-    "Approach 2": "orange",
-    "Approach 3": "green",
-    "Approach 4": "red",
-    "Approach 5": "brown"
+    "Approach 1-Power Density": "blue",
+    "Approach 2-Capacity Maximization": "orange",
+    "Approach 3-Rounding Up": "green",
+    "Approach 4-Single TUrbine Flex": "red",
+    "Approach 5-No-Loss Hybrid": "brown"
 }
 
 for name, path in approaches.items():
@@ -169,7 +170,7 @@ plt.figure(figsize=(12, 6))
 plt.plot(years.year, baseline_capacity, label="No Replacement (Baseline)", color="black", linewidth=2)
 plt.plot(years.year, replacement_capacity, label="Replacement with Same Capacity", linestyle='--', color="gray", linewidth=2)
 for name in approaches:
-    plt.plot(years.year, repowering_capacity_dict[name], label=f"{name} Repowering", linestyle='-.', color=approach_colors[name], linewidth=2)
+    plt.plot(years.year, repowering_capacity_dict[name], label=name, linestyle='-.', color=approach_colors[name], linewidth=2)
 plt.axvline(x=2022, color='gray', linestyle='--', linewidth=1, label='Modeling Starts (2022)')
 plt.title("Combined Capacity Scenarios Over Time (2000-2050)")
 plt.xlabel("Year")
@@ -189,8 +190,8 @@ repowered_country_dict = {}
 for name, path in approaches.items():
     df = load_and_clean_data(path)
     if 'Country' in df.columns:
-        repowered_country_dict[name] = (df.groupby('Country')['Repowered Total Capacity (MW)'].sum() / 1000).rename(f"{name} Repowered (2050)")
-# Combine and plot bar chart
+        repowered_country_dict[name] = (df.groupby('Country')['Repowered Total Capacity (MW)'].sum() / 1000).rename(f"{name} (2050)")
+
 df_bar = pd.concat([baseline_by_country] + list(repowered_country_dict.values()), axis=1).fillna(0)
 df_bar = df_bar.sort_values("Baseline (2022)", ascending=False)
 countries = df_bar.index.tolist()
@@ -200,7 +201,14 @@ bar_width = 0.8 / n_bars
 plt.figure(figsize=(14, 6))
 for i, col in enumerate(df_bar.columns):
     offset = (i - n_bars/2) * bar_width + bar_width/2
-    plt.bar(x + offset, df_bar[col], width=bar_width, label=col)
+    if col == "Baseline (2022)":
+        color = "black"
+    elif col == "Replacement with Same Capacity (2050)":
+        color = "gray"
+    else:
+        approach_name = col.replace(" (2050)", "")
+        color = approach_colors.get(approach_name, "gray")
+    plt.bar(x + offset, df_bar[col], width=bar_width, label=col, color=color)
 plt.xticks(x, countries, rotation=45, ha="right")
 plt.ylabel("Capacity (GW)")
 plt.title("Combined Capacity by Country: Baseline (2022) & Repowered (2050)")
@@ -208,58 +216,19 @@ plt.legend(loc="best", fontsize=9)
 plt.tight_layout()
 plt.show()
 
-# 3. Growth Rate Subplots (3x2) to include all 5 approaches
+# 3. Growth Rate Subplots (3x2) to include all approaches
 fig, axs = plt.subplots(3, 2, figsize=(14, 12))
 axs_flat = axs.flatten()
-for idx, (name) in enumerate(approaches):
+for idx, name in enumerate(approaches):
     ax = axs_flat[idx]
-    ax.plot(year_range, decom_growth_dict[name], label="Decommissioning Growth", marker="o", linewidth=2)
-    ax.plot(year_range, repower_growth_dict[name], label="Repowering Growth", marker="s", linewidth=2)
+    ax.plot(year_range, decom_growth_dict[name], label="Decommissioning Growth", marker="o", linewidth=2, color=approach_colors[name])
+    ax.plot(year_range, repower_growth_dict[name], label="Repowering Growth", marker="s", linestyle='--', linewidth=2, color=approach_colors[name])
     ax.set_title(f"{name} Growth Rates (2022-2042)")
     ax.set_xlabel("Year")
     ax.set_ylabel("Growth Rate (%)")
     ax.legend(fontsize=9)
     ax.grid(True)
-# Remove any extra subplot (6th) if approaches < 6
 for ax in axs_flat[len(approaches):]:
     fig.delaxes(ax)
 plt.tight_layout()
 plt.show()
-
-summary_stats = []
-
-for name, path in approaches.items():
-    df = load_and_clean_data(path)
-
-    for col in ['Total Power (MW)', 'Number of turbines', 'Repowered Total Capacity (MW)', 'New_Turbine_Count',
-                'Recommended_WT_Capacity']:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-
-    df['Old WT Capacity'] = df['Total Power (MW)'] / df['Number of turbines']
-    df['New WT Capacity'] = df['Repowered Total Capacity (MW)'] / df['New_Turbine_Count']
-
-    total_capacity_2050 = df['Repowered Total Capacity (MW)'].sum()
-    number_of_turbines_2050 = df['New_Turbine_Count'].sum()
-
-    # Count each row with a non-empty Recommended_WT_Capacity as 1 park
-    number_of_parks = df['Recommended_WT_Capacity'].apply(lambda x: 1 if pd.notna(x) and x > 0 else 0).sum()
-
-    avg_capacity = total_capacity_2050 / number_of_turbines_2050 if number_of_turbines_2050 else 0
-    increased_capacity_count = df[df['New WT Capacity'] > df['Old WT Capacity']].shape[0]
-    same_or_increased_capacity_count = df[df['New WT Capacity'] >= df['Old WT Capacity']].shape[0]
-
-    summary_stats.append({
-        'Approach': name,
-        'Total Capacity in 2050 (MW)': total_capacity_2050,
-        'Number of Turbines (2050)': number_of_turbines_2050,
-        'Number of Parks (2050)': number_of_parks,
-        'Average Capacity per Turbine (MW)': avg_capacity,
-        'Turbines with Increased Capacity': increased_capacity_count,
-        'Turbines with Increased or Same Capacity': same_or_increased_capacity_count,
-    })
-
-df_summary = pd.DataFrame(summary_stats)
-
-print("\n--- Wind Energy Repowering Summary for 2050 ---")
-print(df_summary.to_string(index=False))
