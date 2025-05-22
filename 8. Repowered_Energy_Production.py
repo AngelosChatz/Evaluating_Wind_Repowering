@@ -1,157 +1,147 @@
+import os
+import glob
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-#%% Define file paths
-excel_path            = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Approach_2_Cf.xlsx"
-old_excel_path        = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Approach_2_Cf_old.xlsx"
-output_yield_file     = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Energy_Yield_Parks.xlsx"
-dual_axis_chart_path  = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\dual_axis_bar_chart.png"
-pie_chart_path        = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\annual_energy_pie_TWh.png"
+# 1) Point to your results folder
+results_dir = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results"
 
-#%% Read main data and clean
-df = pd.read_excel(excel_path, index_col=0)
-df["Total_New_Capacity"]      = pd.to_numeric(df["Total_New_Capacity"], errors='coerce').fillna(0)
-df["CapacityFactor"]          = pd.to_numeric(df["CapacityFactor"], errors='coerce').fillna(0)
-df["Recommended_WT_Capacity"] = pd.to_numeric(df.get("Recommended_WT_Capacity", 0),
-                                               errors='coerce')  # leave NaN for now
+# 2) Load the old decommission+replacement baseline and compute GWh_old
+old_fp = os.path.join(results_dir, "Cf_old_1.xlsx")
+df_old = pd.read_excel(old_fp, index_col=0)
 
-#%% Read old file and prepare for merge
-df_old = pd.read_excel(old_excel_path, index_col=0)
-# ensure we have a numeric Annual_Energy_TWh in the old sheet
-df_old["Annual_Energy_TWh"] = pd.to_numeric(df_old["Annual_Energy_TWh"], errors='coerce').fillna(0)
+# Ensure numeric
+df_old["RepCap_kW"] = pd.to_numeric(df_old["Representative_New_Capacity"], errors="coerce").fillna(0)
+df_old["NumTurbines"] = pd.to_numeric(df_old["Number of turbines"], errors="coerce").fillna(0)
+df_old["CF_pct"] = pd.to_numeric(df_old["CapacityFactor"], errors="coerce").fillna(0)
 
-#%% Join old annual‐energy into main df
-# this will create a helper column 'Annual_Energy_TWh_old'
-df = df.join(
-    df_old[["Annual_Energy_TWh"]]
-    .rename(columns={"Annual_Energy_TWh": "Annual_Energy_TWh_old"}),
-    how="left"
-)
+# Compute total capacity per park in kW
+df_old["TotalCap_kW"] = df_old["RepCap_kW"] * df_old["NumTurbines"]
 
-#%% Fill missing Recommended_WT_Capacity from old Annual_Energy_TWh
-df["Recommended_WT_Capacity"] = df["Recommended_WT_Capacity"].fillna(
-    df["Annual_Energy_TWh_old"]
-)
+# Convert to MW and CF to decimal, then compute annual energy in GWh
+df_old["TotalCap_MW"] = df_old["TotalCap_kW"] / 1e3
+df_old["CF_dec"] = df_old["CF_pct"] / 100.0
+# GWh = MW * hours / 1e3
+df_old["GWh_old"] = df_old["TotalCap_MW"] * df_old["CF_dec"] * 8760 / 1e3
 
-# (optional) drop the helper column
-df = df.drop(columns="Annual_Energy_TWh_old")
+# 3) Initialize aggregation dict with the old baseline
+agg = {
+    "Approach 0-Old (Decomm+Repl)": df_old.groupby("Country")["GWh_old"].sum()
+}
 
-#%% Compute Annual Energy Production
-hours_per_year = 8760
-df["Annual_Energy_MWh"] = df["Total_New_Capacity"] * df["CapacityFactor"] * hours_per_year
-df["Annual_Energy_TWh"] = df["Annual_Energy_MWh"] / 1e6
+# 4) Load each Approach_*_Cf.xlsx repowering scenario, convert to GWh
+pattern = os.path.join(results_dir, "Approach_*_Cf.xlsx")
+name_map = {
+    "Approach_1_Cf.xlsx": "Approach 1-Power Density",
+    "Approach_2_Cf.xlsx": "Approach 2-Capacity Maximization",
+    "Approach_3_Cf.xlsx": "Approach 3-Rounding Up",
+    "Approach_4_Cf.xlsx": "Approach 4-Single Turbine Flex",
+    "Approach_5_Cf.xlsx": "Approach 5-No-Loss Hybrid (Cap-based)"
+}
 
-total_energy_TWh = df["Annual_Energy_TWh"].sum()
-print(f"Total Annual Energy Production (TWh): {total_energy_TWh:.3f}")
+for fp in glob.glob(pattern):
+    fname = os.path.basename(fp)
+    # skip the old baseline file if present
+    if fname.lower().endswith("_old.xlsx"):
+        continue
 
-# Save per-park yields
-df.to_excel(output_yield_file)
-print(f"Energy yield data for every park saved to: {output_yield_file}")
+    label = name_map.get(fname, fname.replace(".xlsx", ""))
+    df = pd.read_excel(fp, index_col=0)
 
-#%% Aggregate by Country
-energy_by_country   = df.groupby("Country")["Annual_Energy_TWh"].sum().reset_index()
-capacity_by_country = df.groupby("Country")["Total_New_Capacity"].sum().reset_index()
+    # clean and compute GWh
+    df["CF"]     = pd.to_numeric(df["CapacityFactor"],      errors="coerce").fillna(0) / 100.0
+    df["Cap_MW"] = pd.to_numeric(df["Total_New_Capacity"],  errors="coerce").fillna(0)
+    df["GWh"]    = df["Cap_MW"] * df["CF"] * 8760 / 1e3
 
-combined = pd.merge(energy_by_country,
-                    capacity_by_country,
-                    on="Country")
-combined = combined.sort_values(by="Annual_Energy_TWh",
-                                ascending=False).reset_index(drop=True)
+    agg[label] = df.groupby("Country")["GWh"].sum()
 
-print("Combined aggregated data (per country):")
-print(combined)
+# 5) Compute the No-Loss Hybrid (Yield-based) scenario as its own Approach
+df_nlh = pd.read_excel(os.path.join(results_dir, "Approach_2_Cf.xlsx"), index_col=0)
+df_nlh["CF"]      = pd.to_numeric(df_nlh["CapacityFactor"],     errors="coerce").fillna(0) / 100.0
+df_nlh["Cap_MW"]  = pd.to_numeric(df_nlh["Total_New_Capacity"], errors="coerce").fillna(0)
+df_nlh["GWh_new"] = df_nlh["Cap_MW"] * df_nlh["CF"] * 8760 / 1e3
 
-#%% Plot 1: Dual-axis Bar Chart
-x     = np.arange(len(combined))
-width = 0.35
+# join with old and pick max yield per park
+df2 = df_nlh.join(df_old["GWh_old"], how="left")
+df2["GWh_yield"] = np.where(df2["GWh_old"] > df2["GWh_new"], df2["GWh_old"], df2["GWh_new"])
+agg["Approach 6-No-Loss Hybrid (Yield-based)"] = df2.groupby("Country")["GWh_yield"].sum()
 
-fig, ax1 = plt.subplots(figsize=(12, 8))
-ax2      = ax1.twinx()
+# 6) Combine into a single DataFrame
+agg_df = pd.DataFrame(agg).fillna(0)
 
-bars1 = ax1.bar(
-    x - width/2,
-    combined['Annual_Energy_TWh'],
-    width,
-    color='blue',
-    label='Annual Energy (TWh)'
-)
-bars2 = ax2.bar(
-    x + width/2,
-    combined['Total_New_Capacity'],
-    width,
-    color='red',
-    alpha=0.7,
-    label='Installed Capacity (MW)'
-)
+# 6b) Ensure "Approach 0-Old (Decomm+Repl)" is first
+cols = ["Approach 0-Old (Decomm+Repl)"] + [c for c in agg_df.columns if c != "Approach 0-Old (Decomm+Repl)"]
+agg_df = agg_df[cols]
 
-ax1.set_xticks(x)
-ax1.set_xticklabels(combined['Country'], rotation=90)
-ax1.set_ylabel("Annual Energy Production (TWh)")
-ax2.set_ylabel("Installed Capacity (MW)")
+# Optional: sort by one scenario
+agg_df = agg_df.sort_values("Approach 2-Capacity Maximization", ascending=False)
 
-# Combine legends
-handles, labels = [], []
-for ax in (ax1, ax2):
-    h, l = ax.get_legend_handles_labels()
-    handles += h; labels += l
-ax1.legend(handles, labels, loc='upper left')
+# --- Styling setup to match your first script ---
+scenario_colors = {
+    "Approach 0-Old (Decomm+Repl)":      "black",
+    "Approach 1-Power Density":          "blue",
+    "Approach 2-Capacity Maximization":  "orange",
+    "Approach 3-Rounding Up":            "green",
+    "Approach 4-Single Turbine Flex":    "red",
+    "Approach 5-No-Loss Hybrid (Cap-based)": "brown",
+    "Approach 6-No-Loss Hybrid (Yield-based)": "purple"
+}
+legend_fs = 9
+label_fs  = 11
+title_fs  = 14
+tick_rot  = 45
+tick_ha   = 'right'
+alpha_val = 0.8
 
-plt.title("Comparison of Annual Energy Yield and Installed Capacity per Country")
+# 7) Plot absolute annual energy (GWh) by country
+x     = np.arange(len(agg_df))
+n     = len(cols)
+width = 0.8 / n
+
+fig, ax = plt.subplots(figsize=(14, 6))
+for i, col in enumerate(cols):
+    ax.bar(
+        x + (i - (n-1)/2) * width,
+        agg_df[col],
+        width,
+        label=col,
+        color=scenario_colors.get(col, 'gray'),
+        alpha=alpha_val
+    )
+
+ax.set_xticks(x)
+ax.set_xticklabels(agg_df.index, rotation=tick_rot, ha=tick_ha, fontsize=label_fs)
+ax.set_ylabel('Annual Energy Production (GWh)', fontsize=label_fs)
+ax.set_title('Energy by Scenario per Country (All Approaches)', fontsize=title_fs)
+ax.legend(loc='upper right', fontsize=legend_fs)
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
 plt.tight_layout()
-plt.savefig(dual_axis_chart_path, dpi=300)
-print(f"Dual-axis chart saved to: {dual_axis_chart_path}")
 plt.show()
 
-#%% Plot 2: Pie Chart of Energy Shares
-# Calculate share
-total_energy = energy_by_country["Annual_Energy_TWh"].sum()
-energy_by_country["Share"] = energy_by_country["Annual_Energy_TWh"] / total_energy
+# 8) Plot relative percentage increase over old baseline
+baseline = agg_df["Approach 0-Old (Decomm+Repl)"]
+rel_cols = cols[1:]
 
-# Split large vs small
-above = energy_by_country[energy_by_country["Share"] >= 0.01].copy()
-below = energy_by_country[energy_by_country["Share"] <  0.01].copy()
+fig, ax = plt.subplots(figsize=(14, 6))
+for i, col in enumerate(rel_cols):
+    pct_increase = (agg_df[col] - baseline) / baseline * 100
+    ax.bar(
+        x + (i - (len(rel_cols)-1)/2) * width,
+        pct_increase,
+        width,
+        label=col,
+        color=scenario_colors.get(col, 'gray'),
+        alpha=alpha_val
+    )
 
-if not below.empty:
-    other_total = below["Annual_Energy_TWh"].sum()
-    other_row   = pd.DataFrame({
-        "Country": ["Other"],
-        "Annual_Energy_TWh": [other_total]
-    })
-    plot_df = pd.concat([above[["Country", "Annual_Energy_TWh"]],
-                         other_row],
-                        ignore_index=True)
-else:
-    plot_df = above[["Country", "Annual_Energy_TWh"]]
-
-# Sort descending
-plot_df = plot_df.sort_values("Annual_Energy_TWh",
-                              ascending=False).reset_index(drop=True)
-
-# Prepare labels
-sizes       = plot_df["Annual_Energy_TWh"]
-labels      = plot_df["Country"]
-percentages = sizes / sizes.sum() * 100
-labels_with_pct = [f"{lbl}\n{pct:.1f}%" for lbl, pct in zip(labels, percentages)]
-
-print("Data for pie chart (sorted, with stacked labels):")
-print(plot_df.assign(Pct=percentages.round(1)))
-
-# Plot
-colors = plt.cm.tab20(np.linspace(0, 1, len(plot_df)))
-
-plt.figure(figsize=(10, 8))
-plt.pie(
-    sizes,
-    labels=labels_with_pct,
-    labeldistance=1.05,
-    startangle=90,
-    counterclock=False,
-    colors=colors,
-    textprops={'fontsize': 8}
-)
-plt.title("Share of Annual Energy Production by Country (TWh)", fontsize=12)
+ax.set_xticks(x)
+ax.set_xticklabels(agg_df.index, rotation=tick_rot, ha=tick_ha, fontsize=label_fs)
+ax.set_ylabel('Percentage Increase over Old Baseline (%)', fontsize=label_fs)
+ax.set_title('Relative Percentage Increase by Scenario per Country', fontsize=title_fs)
+ax.legend(loc='upper right', fontsize=legend_fs)
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
 plt.tight_layout()
-plt.savefig(pie_chart_path, dpi=300)
-print(f"Pie chart saved to: {pie_chart_path}")
 plt.show()

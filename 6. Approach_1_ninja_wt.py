@@ -19,7 +19,6 @@ turbines = [
     # IEC Class 1 turbines
     {"Model": "Siemens.SWT.3.0.101", "Capacity": 3.0, "RotorDiameter": 101, "IEC_Class_Num": 1},
     {"Model": "Siemens SWT 4.3-120", "Capacity": 4.3, "RotorDiameter": 120, "IEC_Class_Num": 1},
-    {"Model": "Siemens SWT 8-154", "Capacity": 8.0, "RotorDiameter": 154, "IEC_Class_Num": 1},
     {"Model": "Siemens.SWT.3.6.107", "Capacity": 3.6, "RotorDiameter": 107, "IEC_Class_Num": 1},
     {"Model": "Siemens Gamesa SG 6-154", "Capacity": 6.0, "RotorDiameter": 154, "IEC_Class_Num": 1},
     {"Model": "Siemens Gamesa SG 8.5-167", "Capacity": 8.5, "RotorDiameter": 167, "IEC_Class_Num": 1},
@@ -34,7 +33,6 @@ turbines = [
     # IEC Class 3 turbines
     {"Model": "Enercon E-115-3.000", "Capacity": 3.0, "RotorDiameter": 115, "IEC_Class_Num": 3},
     {"Model": "Siemens SWT 6.6-170", "Capacity": 6.6, "RotorDiameter": 170, "IEC_Class_Num": 3},
-    {"Model": "Nordex 131-4000", "Capacity": 4.0, "RotorDiameter": 131, "IEC_Class_Num": 3},
     {"Model": "Nordex N131-3000", "Capacity": 3.0, "RotorDiameter": 131, "IEC_Class_Num": 3},
 
     # IEC Class S turbines

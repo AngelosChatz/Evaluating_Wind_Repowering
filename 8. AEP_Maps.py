@@ -5,16 +5,18 @@ from shapely.geometry import Point
 import matplotlib.pyplot as plt
 import contextily as ctx
 from pyproj import Transformer
+import matplotlib.colors as mcolors
 
-# ─── 0. File paths & load NUTS3 ───────────────────────────────────────────────
+
 NEW_FILE     = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Energy_Yield_Parks.xlsx"
 OLD_FILE     = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Approach_2_Cf_old.xlsx"
 SPATIAL_FILE = r"D:\SET 2023\Thesis Delft\Model\atlite_example\data\NUTS_RG_01M_2016_4326.geojson"
 
+# Load NUTS3 regions
 nuts = gpd.read_file(SPATIAL_FILE)
 nuts3_base = nuts[nuts["LEVL_CODE"] == 3].copy()
 
-# ─── 1. Aggregation helper ────────────────────────────────────────────────────
+
 def agg_nuts3(df):
     gdf = gpd.GeoDataFrame(
         df,
@@ -23,7 +25,7 @@ def agg_nuts3(df):
     )
     joined = gpd.sjoin(
         gdf,
-        nuts3_base[["NUTS_ID", "geometry"]],
+        nuts3_base[["NUTS_ID","geometry"]],
         how="inner",
         predicate="within"
     )
@@ -33,63 +35,63 @@ def agg_nuts3(df):
     nuts3["Annual_Energy_GWh"] = nuts3["Annual_Energy_TWh"] * 1000
     return nuts3.to_crs(epsg=3857)
 
-# ─── 2. Read & build scenarios ─────────────────────────────────────────────────
+# input
 df_new = pd.read_excel(NEW_FILE, sheet_name="Sheet1")
 df_old = pd.read_excel(OLD_FILE, sheet_name="Sheet1")
 
-# Repowering (new)
-nuts3_new = agg_nuts3(df_new)
-
-# Hybrid = max(new, old) at park level
-df_hybrid = df_new.copy()
-df_hybrid["Annual_Energy_TWh"] = np.where(
-    df_new["Annual_Energy_TWh"] < df_old["Annual_Energy_TWh"],
-    df_old["Annual_Energy_TWh"],
-    df_new["Annual_Energy_TWh"]
+# Yield-based selection
+mask_yield = df_new["Annual_Energy_TWh"] > df_old["Annual_Energy_TWh"]
+df_yield = df_new.copy()
+df_yield["Annual_Energy_TWh"] = np.where(
+    mask_yield,
+    df_new["Annual_Energy_TWh"],
+    df_old["Annual_Energy_TWh"]
 )
-nuts3_hybrid = agg_nuts3(df_hybrid)
 
-# Old
-nuts3_old = agg_nuts3(df_old)
+# Aggregate per scenario
+nuts3_new   = agg_nuts3(df_new)
+nuts3_old   = agg_nuts3(df_old)
+nuts3_yield = agg_nuts3(df_yield)
 
-# Compute difference
-nuts3_diff = nuts3_hybrid.copy()
+# Compute difference map
+nuts3_diff = nuts3_yield.copy()
 nuts3_diff["Diff_Energy_GWh"] = (
-    nuts3_hybrid["Annual_Energy_GWh"]
+    nuts3_yield["Annual_Energy_GWh"]
     - nuts3_old["Annual_Energy_GWh"]
 )
 
-# Build parks GeoDataFrame in WebMercator
+
 parks = gpd.GeoDataFrame(
     df_new,
     geometry=[Point(xy) for xy in zip(df_new.Longitude, df_new.Latitude)],
     crs="EPSG:4326"
 ).to_crs(epsg=3857)
-parks["status"] = np.where(
-    df_new["Annual_Energy_TWh"] > df_old["Annual_Energy_TWh"],
-    "repowered",
-    "old"
+mask_base = df_new["Annual_Energy_TWh"] > 0
+parks["status_map"] = np.where(
+    mask_yield & mask_base,   'yield_selected',
+    np.where(mask_base,        'base_repowered',
+             'non_repowered')
 )
 
-# Prepare map extent
-transformer = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
-xmin, ymin = transformer.transform(-10.0, 35.0)
-xmax, ymax = transformer.transform(30.0, 70.0)
 
-# Heatmap plotting function
-def plot_heatmap(gdf, column, title):
-    vmin, vmax = gdf[column].min(), gdf[column].max()
-    fig, ax = plt.subplots(figsize=(12, 10))
+status_colors = {
+    'base_repowered': '#e41a1c',    # red
+    'non_repowered':  '#000000',    # black for non repowered
+    'yield_selected': '#377eb8'     # blue
+}
+
+# Map extent (WebMercator)
+transformer = Transformer.from_crs("EPSG:4326","EPSG:3857",always_xy=True)
+xmin, ymin = transformer.transform(-10.0,35.0)
+xmax, ymax = transformer.transform(30.0,70.0)
+
+#  Plot maps
+def plot_nuts3(gdf, col, title, cmap='plasma', norm=None):
+    fig, ax = plt.subplots(figsize=(12,10))
     gdf.plot(
-        column=column,
-        cmap="plasma",
-        vmin=vmin,
-        vmax=vmax,
-        edgecolor="gray",
-        linewidth=0.2,
-        legend=True,
-        legend_kwds={"label": column},
-        ax=ax
+        column=col, cmap=cmap, norm=norm,
+        edgecolor='gray', linewidth=0.2, legend=True,
+        legend_kwds={'label': col}, ax=ax
     )
     ax.set_xlim(xmin, xmax)
     ax.set_ylim(ymin, ymax)
@@ -99,52 +101,56 @@ def plot_heatmap(gdf, column, title):
     plt.tight_layout()
     plt.show()
 
-# Park locations plotting function
-def plot_parks(title):
-    fig, ax = plt.subplots(figsize=(12, 10))
-    for status, color in [("repowered", "red"), ("old", "black")]:
-        parks[parks["status"] == status].plot(
-            ax=ax,
-            marker="o",
-            markersize=2,
-            color=color,
-            alpha=0.4,
-            label=status
+# Plot scenarios
+plot_nuts3(nuts3_new,   'Annual_Energy_GWh',   '1) Repowering (New)')
+plot_nuts3(nuts3_old,   'Annual_Energy_GWh',   '2) Old')
+plot_nuts3(nuts3_yield, 'Annual_Energy_GWh',   '3) Yield-based Selection')
+
+# 4) Difference map: smooth custom map starting at 0
+max_diff = nuts3_diff['Diff_Energy_GWh'].max()
+vmin = 0
+# stops at 0 (white), 500 (blue), max_diff (red)
+stops = [0, 500, max_diff]
+colors = ['white', 'blue', 'red']
+# normalize stops
+stops_norm = [s/max_diff for s in stops]
+custom_cmap = mcolors.LinearSegmentedColormap.from_list('custom_diff', list(zip(stops_norm, colors)))
+norm = plt.Normalize(vmin=vmin, vmax=max_diff)
+
+fig, ax = plt.subplots(figsize=(12,10))
+nuts3_diff.plot(
+    column='Diff_Energy_GWh', cmap=custom_cmap, norm=norm,
+    edgecolor='gray', linewidth=0.2, legend=True,
+    legend_kwds={'label':'Δ Annual Energy (GWh)'}, ax=ax
+)
+# Rotate colorbar label
+cbar = ax.get_figure().axes[-1]
+cbar.yaxis.label.set_rotation(0)
+cbar.yaxis.labelpad = 20
+ax.set_xlim(xmin, xmax)
+ax.set_ylim(ymin, ymax)
+ctx.add_basemap(ax, source=ctx.providers.CartoDB.Positron, zoom=7)
+ax.set_axis_off()
+ax.set_title('4) Yield minus Old: Δ Annual Energy (GWh)', fontsize=16, pad=20)
+plt.tight_layout()
+plt.show()
+
+# 5) Parks status map
+def plot_parks_status():
+    fig, ax = plt.subplots(figsize=(12,10))
+    for status, color in status_colors.items():
+        parks[parks['status_map']==status].plot(
+            ax=ax, marker='o', markersize=3,
+            color=color, alpha=0.6,
+            label=status.replace('_',' ').title()
         )
     ax.set_xlim(xmin, xmax)
     ax.set_ylim(ymin, ymax)
     ctx.add_basemap(ax, source=ctx.providers.CartoDB.Positron, zoom=7)
-    ax.legend(title="Park status")
+    ax.legend(title='Park Status', loc='upper right')
     ax.set_axis_off()
-    ax.set_title(title, fontsize=16, pad=20)
+    ax.set_title('5) Park Status – Base vs Non vs Yield-Selected', fontsize=16, pad=20)
     plt.tight_layout()
     plt.show()
 
-# ─── Draw each figure separately ──────────────────────────────────────────────
-plot_heatmap(nuts3_new,   "Annual_Energy_GWh",            "1) Repowering (New)")
-plot_heatmap(nuts3_hybrid,"Annual_Energy_GWh",            "2) Hybrid (Max new/old)")
-plot_heatmap(nuts3_old,   "Annual_Energy_GWh",            "3) Old")
-plot_parks("4) Wind Park Locations — Red = repowered, Black = old")
-plot_heatmap(nuts3_diff,  "Diff_Energy_GWh",              "5) Hybrid minus Old: Δ Annual Energy (GWh)")
-
-
-# ─── After you construct df_hybrid ────────────────────────────────────────────
-
-# Boolean mask: True when we pulled from df_old (because df_new was zero)
-from_old_mask = df_new["Annual_Energy_TWh"] == 0
-
-n_total        = len(df_new)
-n_from_old     = from_old_mask.sum()
-n_from_new     = n_total - n_from_old
-
-# Power‐increase mask: True when new > old
-power_increase_mask = df_new["Annual_Energy_TWh"] > df_old["Annual_Energy_TWh"]
-n_power_increase    = power_increase_mask.sum()
-
-print("Hybrid sourcing summary:")
-print(f"  • Total parks:            {n_total}")
-print(f"  • Used NEW data for:      {n_from_new} rows ({n_from_new/n_total*100:.1f}%)")
-print(f"  • Fell back to OLD data:  {n_from_old} rows ({n_from_old/n_total*100:.1f}%)\n")
-
-print("Power‐increase summary:")
-print(f"  • Parks where NEW > OLD:  {n_power_increase} rows ({n_power_increase/n_total*100:.1f}%)")
+plot_parks_status()

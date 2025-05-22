@@ -14,7 +14,6 @@ turbines = [
     # IEC Class 1
     {"Model": "Siemens SWT 3-101",      "Capacity": 3.0,  "RotorDiameter": 101, "IEC_Class_Num": 1},
     {"Model": "Siemens SWT 4.3-120",    "Capacity": 4.3,  "RotorDiameter": 120, "IEC_Class_Num": 1},
-    {"Model": "Siemens SWT 8-154",      "Capacity": 8.0,  "RotorDiameter": 154, "IEC_Class_Num": 1},
     {"Model": "Siemens.SWT.3.6.107",    "Capacity": 3.6,  "RotorDiameter": 107, "IEC_Class_Num": 1},
     {"Model": "Siemens Gamesa SG 6-154","Capacity": 6.0,  "RotorDiameter": 154, "IEC_Class_Num": 1},
     {"Model": "Siemens Gamesa SG 8.5-167","Capacity": 8.5,"RotorDiameter": 167, "IEC_Class_Num": 1},
