@@ -2,24 +2,23 @@
 import atlite
 import pandas as pd
 import geopandas as gpd
-import matplotlib.pyplot as plt
 
+# ─── 1. File paths ────────────────────────────────────────────────────────────────
+path_source          = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Approach_2.xlsx"
+path_old_cf          = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Approach_2_Cf_old.xlsx"
+path_spatial_units   = r"D:\SET 2023\Thesis Delft\Model\atlite_example\data\NUTS_RG_01M_2016_4326.geojson"
+path_custom_geo      = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\data\custom.geo.json"
+path_cutout          = r"D:\SET 2023\Thesis Delft\Model\atlite_example\data\era5.nc"
+path_power_curve     = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\data\Power Curves.csv"
+output_path          = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\CF_old.xlsx"
 
+# ─── 2. Load original repowering results & spatial units ────────────────────────
+print("Loading source repowering results…")
+rep = pd.read_excel(path_source, sheet_name="Sheet1", index_col=0)
+spatial = gpd.read_file(path_spatial_units).set_index("NUTS_ID")
 
-# Input files and output file paths:
-path_repowering_results = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Approach_2.xlsx"
-path_cutout = r"D:\SET 2023\Thesis Delft\Model\atlite_example\data\era5.nc"  # ERA5 netCDF file
-path_spatial_units = r"D:\SET 2023\Thesis Delft\Model\atlite_example\data\NUTS_RG_01M_2016_4326.geojson"
-path_power_curve = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\data\Power Curves.csv"
-output_path = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Approach_2_Cf_old.xlsx"
+# ─── 3. Assign representative turbines & compute capacities ─────────────────────
 
-
-# 2. LOAD REPLOWERING RESULTS & SPATIAL UNITS
-repowering_results = pd.read_excel(path_repowering_results, sheet_name="Sheet1", index_col=0)
-spatial_units = gpd.read_file(path_spatial_units).set_index("NUTS_ID")
-
-
-# 3. ASSIGN REPRESENTATIVE WIND TURBINE MODELS
 rep_turbines = {
     'Acciona.AW77.1500': 1500,
     'Alstom.Eco.74': 1670,
@@ -143,133 +142,126 @@ rep_turbines = {
     'Windflow.500': 500,
     'XANT.M21.100': 100
 }
-#keep only one model per unique capacity.
-unique_rep_turbines = {}
-for model, capacity in rep_turbines.items():
-    if capacity not in unique_rep_turbines:
-        unique_rep_turbines[capacity] = model
 
+# keep one model per unique capacity
+unique_rep = {}
+for model, cap in rep_turbines.items():
+    if cap not in unique_rep:
+        unique_rep[cap] = model
 
-
-def assign_representative_turbine(single_capacity):
-    if pd.isna(single_capacity):
+def assign_rep_turbine(capacity):
+    if pd.isna(capacity):
         return None, None
-    closest_cap = None
-    min_diff = float('inf')
-    for cap in unique_rep_turbines.keys():
-        diff = abs(single_capacity - cap)
-        if diff < min_diff:
-            min_diff = diff
-            closest_cap = cap
-    return unique_rep_turbines[closest_cap], closest_cap
+    # find closest capacity
+    closest, _ = min(unique_rep.items(), key=lambda x: abs(x[0] - capacity))
+    return unique_rep[closest], closest
 
-
-# Create new columns: Representative_New_Model, Representative_New_Capacity, and Capacity_Diff
-repowering_results[['Representative_New_Model', 'Representative_New_Capacity']] = (
-    repowering_results['SingleWT_Capacity']
-    .apply(lambda x: assign_representative_turbine(x))
-    .apply(pd.Series)
+# apply assignment
+rep[["Representative_New_Model", "Representative_New_Capacity"]] = (
+    rep["SingleWT_Capacity"]
+       .apply(lambda x: assign_rep_turbine(x))
+       .apply(pd.Series)
 )
-repowering_results['Capacity_Diff'] = abs(
-    repowering_results['SingleWT_Capacity'] - repowering_results['Representative_New_Capacity']
+rep["Capacity_Diff"] = (rep["SingleWT_Capacity"] - rep["Representative_New_Capacity"]).abs()
+
+# compute total new capacity
+rep["Total_New_Capacity"] = rep["Representative_New_Capacity"] * rep["Number of turbines"]
+
+# ─── 4. Prepare layout and power‐curve helper ────────────────────────────────────
+layout = rep[["Latitude","Longitude","Representative_New_Model","Total_New_Capacity"]].rename(
+    columns={"Longitude":"x","Latitude":"y"}
 )
 
-
-# 4. PREPARE THE LAYOUT FOR ATLITE
-# Use the new representative assignment for layout.
-cols_layout = ["Latitude", "Longitude", "Representative_New_Model", "Total_New_Capacity"]
-layout_point = repowering_results[cols_layout].copy()
-layout_point = layout_point.rename(columns={"Longitude": "x", "Latitude": "y"})
-
-# Compute spatial bounds from the layout points (adding a small margin)
-margin = 0.1
-x_min = layout_point["x"].min() - margin
-x_max = layout_point["x"].max() + margin
-y_min = layout_point["y"].min() - margin
-y_max = layout_point["y"].max() + margin
-bounds = [x_min, y_min, x_max, y_max]
-
-
-# 5. LOAD POWER CURVE DATA FROM THE CSV FILE
+# load power curves
 pc_df = pd.read_csv(path_power_curve)
 if pc_df.columns[0].strip().lower() == "speed":
     pc_df.rename(columns={pc_df.columns[0]: "Wind speed"}, inplace=True)
 
+def get_turbine_cfg(name):
+    if name not in pc_df.columns:
+        return None
+    return {
+        "hub_height": 100,
+        "V":   pc_df["Wind speed"].tolist(),
+        "POW": pc_df[name].tolist(),
+        "P":   float(pc_df[name].max())
+    }
 
-def get_turbine_config_from_df(df, turbine_name):
-    """
-    Returns a turbine configuration dictionary for turbine_name if found as a column in df.
-    Assumes the first column is "Wind speed".
-    """
-    if turbine_name in df.columns:
-        wind_speeds = df["Wind speed"].values
-        power_values = df[turbine_name].values
-        config = {
-            "hub_height": 100,  # Adjust this if needed.
-            "V": wind_speeds.tolist(),
-            "POW": power_values.tolist(),
-            "P": max(power_values)
-        }
-        return config
-    return None
-
-# 7. CREATE THE ATLITE CUTOUT WITH TIME, MODULE, AND BOUNDS
+# build ERA5 cutout
+margin = 0.1
+bounds = [
+    layout.x.min() - margin, layout.y.min() - margin,
+    layout.x.max() + margin, layout.y.max() + margin
+]
+print("Building ERA5 cutout…")
 cutout = atlite.Cutout(
     path_cutout,
     bounds=bounds,
-    time=slice("2010-01-01", "2010-12-31"),
+    time=slice("2010-01-01","2010-12-31"),
     module="10m_wind_speed"
 )
+print("Cutout ready\n")
 
-# 8. CALCULATE CAPACITY FACTORS FOR EACH UNIQUE REPRESENTATIVE TURBINE MODEL
-turbine_models = repowering_results["Representative_New_Model"].unique()
-
-for turbine in turbine_models:
-    # Get the turbine configuration from the power curve CSV.
-    turbine_config = get_turbine_config_from_df(pc_df, turbine)
-    if turbine_config is None:
-        print(f"No matching power curve data found for turbine: {turbine}")
+# ─── 5. First pass: compute CF over NUTS polygons ───────────────────────────────
+print("Running first-pass CF calculation over NUTS regions…")
+for turb in rep["Representative_New_Model"].dropna().unique():
+    cfg = get_turbine_cfg(turb)
+    if cfg is None:
+        print(f"⚠️  No power curve for {turb}, skipping.")
         continue
 
-    # Filter layout points for entries with this representative turbine.
-    layout_point_turbine = layout_point[layout_point["Representative_New_Model"] == turbine].copy()
-    if layout_point_turbine.empty:
+    pts = layout[layout.Representative_New_Model == turb].copy()
+    if pts.empty:
         continue
 
-    # Create the layout using the 'Total_New_Capacity' column.
-    layout = cutout.layout_from_capacity_list(layout_point_turbine, col="Total_New_Capacity")
+    layout_list = cutout.layout_from_capacity_list(pts, col="Total_New_Capacity")
+    cf = cutout.wind(turbine=cfg, layout=layout_list, shapes=spatial, per_unit=True)
+    mean_cf = cf.mean(dim="time").to_dataframe(name="CF").rename_axis("NUTS_ID")
+    cf_map = spatial.merge(mean_cf, left_index=True, right_index=True)
 
-    # Calculate wind capacity factors using atlite.
-    capacityfactors = cutout.wind(
-        turbine=turbine_config,
-        layout=layout,
-        shapes=spatial_units,
-        per_unit=True,
+    gdf = gpd.GeoDataFrame(
+        pts,
+        geometry=gpd.points_from_xy(pts.x, pts.y),
+        crs=spatial.crs
     )
+    joined = gpd.sjoin(gdf, cf_map[["CF","geometry"]], how="left", predicate="within")
+    rep.loc[joined.index, "CapacityFactor"] = joined["CF"]
 
-    # Save the time-resolved capacity factors to a NetCDF file.
-    safe_turbine_name = turbine.replace("/", "_").replace(" ", "_")
-    capacityfactors.to_netcdf(f"cf_wind_{safe_turbine_name}.nc")
+# ─── 6. Fallback: custom-country pass for any remaining NaNs ────────────────────
+mask_nan = rep["CapacityFactor"].isna()
+print(f"{mask_nan.sum()} rows still missing CF → running fallback on custom countries\n")
+if mask_nan.any():
+    USE_CUSTOM = [
+        "Ukraine","Belarus","Kosovo","Iceland",
+        "Slovenia","Bosnia and Herz.","Faeroe Is."
+    ]
+    custom = gpd.read_file(path_custom_geo).set_index("name").loc[USE_CUSTOM]
 
-    # Compute the mean capacity factor (over time) and convert to a DataFrame.
-    mean_cf = capacityfactors.mean(dim="time").to_dataframe(name=turbine)
+    layout2 = layout[mask_nan].copy()
+    for turb in layout2["Representative_New_Model"].dropna().unique():
+        cfg = get_turbine_cfg(turb)
+        if cfg is None:
+            print(f"⚠️  No power curve for {turb} in fallback, skipping.")
+            continue
 
-    # Merge the mean capacity factors with the spatial units (polygons).
-    cf_map = spatial_units.merge(mean_cf, on="NUTS_ID")
+        pts2 = layout2[layout2.Representative_New_Model == turb]
+        print(f"Fallback for {turb}: {len(pts2)} point(s)")
+        layout_list = cutout.layout_from_capacity_list(pts2, col="Total_New_Capacity")
+        cf2 = cutout.wind(turbine=cfg, layout=layout_list, shapes=custom, per_unit=True)
+        mean_cf2 = cf2.mean(dim="time").to_dataframe(name="CF").rename_axis("name")
+        cf_map2 = custom[["geometry"]].merge(mean_cf2, left_index=True, right_index=True)
 
-    # Create a GeoDataFrame for the turbine locations for this turbine model.
-    gdf_turbine = gpd.GeoDataFrame(
-        layout_point_turbine,
-        geometry=gpd.points_from_xy(layout_point_turbine["x"], layout_point_turbine["y"]),
-        crs=spatial_units.crs
-    )
+        gdf2 = gpd.GeoDataFrame(
+            pts2,
+            geometry=gpd.points_from_xy(pts2.x, pts2.y),
+            crs=custom.crs
+        )
+        joined2 = gpd.sjoin(gdf2, cf_map2[["CF","geometry"]], how="left", predicate="within")
+        rep.loc[joined2.index, "CapacityFactor"] = joined2["CF"]
+        for idx, row in joined2.iterrows():
+            print(f"  • Row {idx}: CF = {row['CF']:.3f}")
 
-    # Spatially join the mean capacity factor from the polygons onto each turbine point.
-    gdf_joined = gpd.sjoin(gdf_turbine, cf_map[[turbine, "geometry"]], how="left", predicate="within")
-    gdf_joined = gdf_joined.rename(columns={turbine: "CapacityFactor"})
-
-    # Update the repowering_results DataFrame with the capacity factor.
-    repowering_results.loc[gdf_joined.index, "CapacityFactor"] = gdf_joined["CapacityFactor"]
-
-repowering_results.to_excel(output_path)
-print(f"Updated repowering results saved to: {output_path}")
+# ─── 7. Save final results ───────────────────────────────────────────────────────
+print("\nSaving completed CF results to:", output_path)
+rep.to_excel(output_path)
+print("Done ✅")
