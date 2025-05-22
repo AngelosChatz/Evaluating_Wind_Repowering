@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 results_dir = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results"
 
 # 2) Load the old decommission+replacement baseline and compute GWh_old
-old_fp = os.path.join(results_dir, "Cf_old_1.xlsx")
+old_fp = os.path.join(results_dir, "Cf_old_updated.xlsx")
 df_old = pd.read_excel(old_fp, index_col=0)
 
 # Ensure numeric
