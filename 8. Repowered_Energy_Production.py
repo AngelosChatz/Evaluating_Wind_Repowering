@@ -12,17 +12,17 @@ old_fp = os.path.join(results_dir, "Cf_old_updated.xlsx")
 df_old = pd.read_excel(old_fp, index_col=0)
 
 # Ensure numeric
-df_old["RepCap_kW"] = pd.to_numeric(df_old["Representative_New_Capacity"], errors="coerce").fillna(0)
-df_old["NumTurbines"] = pd.to_numeric(df_old["Number of turbines"], errors="coerce").fillna(0)
-df_old["CF_pct"] = pd.to_numeric(df_old["CapacityFactor"], errors="coerce").fillna(0)
+df_old["RepCap_kW"]   = pd.to_numeric(df_old["Representative_New_Capacity"], errors="coerce").fillna(0)
+df_old["NumTurbines"] = pd.to_numeric(df_old["Number of turbines"],       errors="coerce").fillna(0)
+df_old["CF_pct"]      = pd.to_numeric(df_old["CapacityFactor"],           errors="coerce").fillna(0)
 
-# Compute total capacity per park in kW
+# Compute total capacity per park in kW → MW
 df_old["TotalCap_kW"] = df_old["RepCap_kW"] * df_old["NumTurbines"]
-
-# Convert to MW and CF to decimal, then compute annual energy in GWh
 df_old["TotalCap_MW"] = df_old["TotalCap_kW"] / 1e3
-df_old["CF_dec"] = df_old["CF_pct"] / 100.0
-# GWh = MW * hours / 1e3
+
+# CF to decimal, then annual energy in GWh
+df_old["CF_dec"]  = df_old["CF_pct"] / 100.0
+# GWh = MW * CF * 8760 h / 1e3
 df_old["GWh_old"] = df_old["TotalCap_MW"] * df_old["CF_dec"] * 8760 / 1e3
 
 # 3) Initialize aggregation dict with the old baseline
@@ -30,54 +30,80 @@ agg = {
     "Approach 0-Old (Decomm+Repl)": df_old.groupby("Country")["GWh_old"].sum()
 }
 
-# 4) Load each Approach_*_Cf.xlsx repowering scenario, convert to GWh
+# 4) Load each Approach_1–4 repowering scenario, convert to GWh
 pattern = os.path.join(results_dir, "Approach_*_Cf.xlsx")
 name_map = {
     "Approach_1_Cf.xlsx": "Approach 1-Power Density",
     "Approach_2_Cf.xlsx": "Approach 2-Capacity Maximization",
     "Approach_3_Cf.xlsx": "Approach 3-Rounding Up",
     "Approach_4_Cf.xlsx": "Approach 4-Single Turbine Flex",
-    "Approach_5_Cf.xlsx": "Approach 5-No-Loss Hybrid (Cap-based)"
 }
 
 for fp in glob.glob(pattern):
     fname = os.path.basename(fp)
-    # skip the old baseline file if present
+    # skip the old baseline file
     if fname.lower().endswith("_old.xlsx"):
         continue
 
-    label = name_map.get(fname, fname.replace(".xlsx", ""))
-    df = pd.read_excel(fp, index_col=0)
+    label = name_map.get(fname)
+    # only load Approaches 1–4 here
+    if label is None:
+        continue
 
-    # clean and compute GWh
-    df["CF"]     = pd.to_numeric(df["CapacityFactor"],      errors="coerce").fillna(0) / 100.0
-    df["Cap_MW"] = pd.to_numeric(df["Total_New_Capacity"],  errors="coerce").fillna(0)
+    df = pd.read_excel(fp, index_col=0)
+    df["CF"]     = pd.to_numeric(df["CapacityFactor"],     errors="coerce").fillna(0) / 100.0
+    df["Cap_MW"] = pd.to_numeric(df["Total_New_Capacity"], errors="coerce").fillna(0)
     df["GWh"]    = df["Cap_MW"] * df["CF"] * 8760 / 1e3
 
     agg[label] = df.groupby("Country")["GWh"].sum()
 
-# 5) Compute the No-Loss Hybrid (Yield-based) scenario as its own Approach
-df_nlh = pd.read_excel(os.path.join(results_dir, "Approach_2_Cf.xlsx"), index_col=0)
+# 5) Prepare Approach_2 frame for the two hybrids
+fp2 = os.path.join(results_dir, "Approach_2_Cf.xlsx")
+df_nlh = pd.read_excel(fp2, index_col=0)
 df_nlh["CF"]      = pd.to_numeric(df_nlh["CapacityFactor"],     errors="coerce").fillna(0) / 100.0
 df_nlh["Cap_MW"]  = pd.to_numeric(df_nlh["Total_New_Capacity"], errors="coerce").fillna(0)
 df_nlh["GWh_new"] = df_nlh["Cap_MW"] * df_nlh["CF"] * 8760 / 1e3
 
-# join with old and pick max yield per park
-df2 = df_nlh.join(df_old["GWh_old"], how="left")
-df2["GWh_yield"] = np.where(df2["GWh_old"] > df2["GWh_new"], df2["GWh_old"], df2["GWh_new"])
-agg["Approach 6-No-Loss Hybrid (Yield-based)"] = df2.groupby("Country")["GWh_yield"].sum()
+# 5a) No-Loss Hybrid (Yield-based)
+df_yield = df_nlh.join(df_old["GWh_old"], how="left")
+df_yield["GWh_yield"] = np.where(
+    df_yield["GWh_old"] > df_yield["GWh_new"],
+    df_yield["GWh_old"],
+    df_yield["GWh_new"]
+)
+agg["Approach 6-No-Loss Hybrid (Yield-based)"] = df_yield.groupby("Country")["GWh_yield"].sum()
+
+# 5b) No-Loss Hybrid (Capacity-based)
+df_cap = df_nlh.join(
+    df_old[["TotalCap_MW", "GWh_old"]],
+    how="left"
+)
+df_cap["GWh_cap_based"] = np.where(
+    df_cap["TotalCap_MW"] > df_cap["Cap_MW"],
+    df_cap["GWh_old"],
+    df_cap["GWh_new"]
+)
+agg["Approach 5-No-Loss Hybrid (Cap-based)"] = df_cap.groupby("Country")["GWh_cap_based"].sum()
 
 # 6) Combine into a single DataFrame
 agg_df = pd.DataFrame(agg).fillna(0)
 
-# 6b) Ensure "Approach 0-Old (Decomm+Repl)" is first
-cols = ["Approach 0-Old (Decomm+Repl)"] + [c for c in agg_df.columns if c != "Approach 0-Old (Decomm+Repl)"]
+# 6b) Ensure the baseline is first, then order the rest
+cols = [
+    "Approach 0-Old (Decomm+Repl)",
+    "Approach 1-Power Density",
+    "Approach 2-Capacity Maximization",
+    "Approach 3-Rounding Up",
+    "Approach 4-Single Turbine Flex",
+    "Approach 5-No-Loss Hybrid (Cap-based)",
+    "Approach 6-No-Loss Hybrid (Yield-based)"
+]
 agg_df = agg_df[cols]
 
-# Optional: sort by one scenario
+# Optional: sort countries by one scenario
 agg_df = agg_df.sort_values("Approach 2-Capacity Maximization", ascending=False)
 
-# --- Styling setup to match your first script ---
+# --- Styling for plotting ---
 scenario_colors = {
     "Approach 0-Old (Decomm+Repl)":      "black",
     "Approach 1-Power Density":          "blue",
@@ -106,7 +132,7 @@ for i, col in enumerate(cols):
         agg_df[col],
         width,
         label=col,
-        color=scenario_colors.get(col, 'gray'),
+        color=scenario_colors[col],
         alpha=alpha_val
     )
 
@@ -132,7 +158,7 @@ for i, col in enumerate(rel_cols):
         pct_increase,
         width,
         label=col,
-        color=scenario_colors.get(col, 'gray'),
+        color=scenario_colors[col],
         alpha=alpha_val
     )
 
@@ -140,7 +166,10 @@ ax.set_xticks(x)
 ax.set_xticklabels(agg_df.index, rotation=tick_rot, ha=tick_ha, fontsize=label_fs)
 ax.set_ylabel('Percentage Increase over Old Baseline (%)', fontsize=label_fs)
 ax.set_title('Relative Percentage Increase by Scenario per Country', fontsize=title_fs)
-ax.legend(loc='upper right', fontsize=legend_fs)
+
+# legend on the left:
+ax.legend(loc='upper left', fontsize=legend_fs)
+
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 plt.tight_layout()

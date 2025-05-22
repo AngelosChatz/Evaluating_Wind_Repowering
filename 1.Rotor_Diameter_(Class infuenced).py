@@ -198,7 +198,8 @@ plt.yscale('log')
 plt.xlabel("Single WT Capacity (MW) [log scale]")
 plt.ylabel("Rotor Diameter (m) [log scale]")
 plt.title("Per-Class Log–Log Regression (with Error Metrics)")
-plt.legend(fontsize=9)
+plt.legend(fontsize=12)
+
 plt.tight_layout()
 plt.show()
 
@@ -222,7 +223,7 @@ for grp in groups:
 plt.xlabel("Single WT Capacity (MW)")
 plt.ylabel("Rotor Diameter (m)")
 plt.title("Per-Class Regression on Linear Scale")
-plt.legend(fontsize=9)
+plt.legend(fontsize=12)
 plt.tight_layout()
 plt.show()
 
@@ -251,7 +252,7 @@ plt.yscale('log')
 plt.xlabel("Single WT Capacity (MW) [log scale]")
 plt.ylabel("Rotor Diameter (m) [log scale]")
 plt.title("Overall Log–Log Regression")
-plt.legend(fontsize=9)
+plt.legend(fontsize=12)
 plt.tight_layout()
 plt.show()
 
@@ -263,7 +264,7 @@ plt.plot(X_fit_overall, y_fit_overall, linewidth=2.5, color="red",
 plt.xlabel("Single WT Capacity (MW)")
 plt.ylabel("Rotor Diameter (m)")
 plt.title("Overall Regression (Linear Scale)")
-plt.legend(fontsize=9)
+plt.legend(fontsize=12)
 plt.tight_layout()
 plt.show()
 
