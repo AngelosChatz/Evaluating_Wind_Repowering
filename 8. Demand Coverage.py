@@ -4,42 +4,41 @@ import matplotlib.pyplot as plt
 
 # === FILE PATHS ===
 repowered_path = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Approach_2_Cf.xlsx"
-existing_path  = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Approach_2_Cf_old.xlsx"
+existing_path  = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Cf_old_updated.xlsx"
 
-
+# Read data
 df = pd.read_excel(repowered_path, index_col=0)
 df["Total_New_Capacity"] = pd.to_numeric(df["Total_New_Capacity"], errors="coerce").fillna(0)
 df["CapacityFactor"]     = pd.to_numeric(df["CapacityFactor"],     errors="coerce").fillna(0)
 
-
+# Load and rename old baseline data
 df_old = pd.read_excel(existing_path, index_col=0)
 df_old = df_old.rename(columns={
-    "Total_New_Capacity": "Total_Old_Capacity",
-    "Annual_Energy_TWh":  "Annual_Energy_TWh_old"
+    "Total_New_Capacity": "Total_Baseline_Capacity",  # Renaming to Baseline
+    "Annual_Energy_TWh":  "Annual_Energy_TWh_Baseline"  # Renaming to Baseline
 })
-df_old["Total_Old_Capacity"]    = pd.to_numeric(df_old["Total_Old_Capacity"],    errors="coerce").fillna(0)
-df_old["Annual_Energy_TWh_old"] = pd.to_numeric(df_old["Annual_Energy_TWh_old"], errors="coerce").fillna(0)
+df_old["Total_Baseline_Capacity"]    = pd.to_numeric(df_old["Total_Baseline_Capacity"],    errors="coerce").fillna(0)
+df_old["Annual_Energy_TWh_Baseline"] = pd.to_numeric(df_old["Annual_Energy_TWh_Baseline"], errors="coerce").fillna(0)
 
-# = Merge old into new DataFrame
-df = df.join(df_old[["Total_Old_Capacity", "Annual_Energy_TWh_old"]], how="left")
-
+# = Merge old Baseline into new DataFrame
+df = df.join(df_old[["Total_Baseline_Capacity", "Annual_Energy_TWh_Baseline"]], how="left")
 
 hours_per_year         = 8760
 df["Annual_Energy_TWh"] = df["Total_New_Capacity"] * df["CapacityFactor"] * hours_per_year / 1e6
 
 # === 5) Create selection columns ===
 df["Selected_by_Capacity"] = np.where(
-    df["Total_Old_Capacity"] > df["Total_New_Capacity"],
-    df["Annual_Energy_TWh_old"],
+    df["Total_Baseline_Capacity"] > df["Total_New_Capacity"],
+    df["Annual_Energy_TWh_Baseline"],
     df["Annual_Energy_TWh"]
 )
 df["Selected_by_Yield"] = np.where(
-    df["Annual_Energy_TWh_old"] > df["Annual_Energy_TWh"],
-    df["Annual_Energy_TWh_old"],
+    df["Annual_Energy_TWh_Baseline"] > df["Annual_Energy_TWh"],
+    df["Annual_Energy_TWh_Baseline"],
     df["Annual_Energy_TWh"]
 )
 
-
+# === Consumption Data ===
 consumption_data = {
     "Country": [
         "Russia","Germany","France","Italy","UK","Turkey","Spain","Poland","Sweden","Norway",
@@ -58,24 +57,23 @@ consumption_data = {
 }
 df_cons = pd.DataFrame(consumption_data)
 
-
+# Summing the data
 wind_cap = df.groupby("Country")["Selected_by_Capacity"].sum().rename("Wind_CapBased_TWh")
 wind_yld = df.groupby("Country")["Selected_by_Yield"].sum().rename("Wind_YieldBased_TWh")
 
-
+# Merge consumption and wind energy data
 df_comb = (
     df_cons
     .merge(wind_cap, left_on="Country", right_index=True, how="inner")
     .merge(wind_yld, left_on="Country", right_index=True, how="inner")
 )
 
-#  Compute coverage % for stats
+# Compute coverage %
 df_comb["Coverage_Cap_%"] = df_comb["Wind_CapBased_TWh"] / df_comb["Electricity_Consumption_TWh"] * 100
 df_comb["Coverage_Yld_%"] = df_comb["Wind_YieldBased_TWh"] / df_comb["Electricity_Consumption_TWh"] * 100
 
-
+# Sort by capacity coverage
 df_sorted = df_comb.sort_values("Coverage_Cap_%", ascending=False).reset_index(drop=True)
-
 
 import matplotlib as mpl
 
@@ -91,12 +89,12 @@ fig, ax = plt.subplots(figsize=(18, 8))
 fig.patch.set_facecolor('white')
 ax.set_facecolor('white')
 
-# draw bars
+# Draw bars
 ax.bar(
     x - width/2,
     df_sorted["Coverage_Cap_%"],
     width=width,
-    label="Capacity-Based",
+    label="Baseline - Capacity-Based",  # Updated label for Baseline
     color=colors[0],
     edgecolor='black',
     linewidth=0.7
@@ -105,27 +103,27 @@ ax.bar(
     x + width/2,
     df_sorted["Coverage_Yld_%"],
     width=width,
-    label="Yield-Based",
+    label="Repowering NLH-Energy Yield",  # Updated label for Repowering NLH-Energy Yield
     color=colors[1],
     edgecolor='black',
     linewidth=0.7
 )
 
-# grid only on y-axis
+# Grid only on y-axis
 ax.yaxis.grid(True, linestyle='--', alpha=0.6)
 ax.xaxis.grid(False)
 
-# ticks & labels
+# Ticks & labels
 ax.set_xticks(x)
 ax.set_xticklabels(df_sorted["Country"], rotation=45, ha='right', fontsize=10)
 ax.tick_params(axis='y', labelsize=12)
 
-# labels & title
+# Labels & title
 ax.set_ylabel("Demand Coverage (%)", fontsize=14, labelpad=10)
 ax.set_title("EU Countries: Demand Coverage by Repowering Approach",
              fontsize=18, fontweight='bold', pad=15)
 
-# legend
+# Legend
 ax.legend(loc="upper right", fontsize=12, frameon=False)
 
 plt.tight_layout()
