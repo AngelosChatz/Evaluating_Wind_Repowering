@@ -17,6 +17,7 @@ The following Data list should be created in a folder within the repository name
 6. Power curves                           - RenewablesNinja power curves and a few additional found from litterature (Enercon E-115-3.000	Enercon E126-4000	Nordex 100-3300	Siemens SWT 3.6-107	Vestas V164-9500	Siemens SWT 6.6-170	Vestas V136-3.45)
 
 
+
 #Running Sequence
 
 Firstly, install the necessary libraries listed in requirements.txt and then run the submodels in the following prioritized order:
@@ -28,9 +29,15 @@ Firstly, install the necessary libraries listed in requirements.txt and then run
 5. Repowering_Calculation_Stage_1_(Float) : Calcualtes the repowered capacity of every wind park in the EU, number of turbines is a real number (Float)
 6. Approach_*_ninja_wt                    : Calculates the repowered capacity of every wind park in the EU, number of turbines is an integer, with 4 different approaches increasing in land flexibility
 7. Repowering_Capacity_Comaprisons        : Succesfull repowerings per country and average power increase (percentage) per apporach
-
-7. Plot_Repowering_Capacity               : Total Eu Capacity for each approach, with 1 year wind farm construction delay, Approaches comparison bar chart per country, and growth rate per approach
-10. Additional_Result_plots                : Power density per country, Comparative power density per approach, Required land area comparison (2,3,baseline)
+8. Plot_Repowering_Capacity               : Total Eu Capacity for each approach, with 1 year wind farm construction delay, Approaches comparison bar chart per country, and growth rate per approach
+9. Prepare_capacity_factors               : The Capacity factors of each wind park are computed based on the meterological data(ERA5) and wind turbine power curves with the use of NUTS level 3 regions geo.json boundaries
+10. Energy_Production_old                 : The old wind turbines were assigned a representative based on the closest from the RenewablesNinja power curves, and then their capacity factors were calculated the same way as the Prepare_capacity_factors script
+11. Repowered_Energy_Production           : Per country and scenario energy production, and relative percentage variation
+12. AEP_Maps                              : Energy related maps, old production, repowered (approach 2 cap.max.), NLH(Yield-based), and difference between old and NLH. Map of wind parks that were repowered based on the NLH(Yield-based) approach
+13. Demand Coverage                       : Plots the coverage of wind energy (old vs. repowered) of the countries of interest
+14. Costs Model                           : Produces economic related plots (LCoE, IRR, NPV Payback Period)
+15. lcoe                                  : LCoE comparisons per scenario, country and learning rate assumption (Sensitivity analysis)
+16. Additional_Result_plots               : Power density per country, Comparative power density per approach, Required land area comparison
 
 #Outputs
 
