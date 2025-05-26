@@ -13,21 +13,25 @@ Data:
 1. Wind farm database            - Windfarms_World_20230530.xlsx
 2. GIS file with classifications - gwa3_250_windspeed_100m.tif
 3. Elevation map                 - Eurodem.tif
+4. 
+#Running Sequience
 
 Firstly, install the necessary libraries listed in requirements.txt and athen run the submodels in the following prioritized order:
 
-1.Rotor_diameter_(Class influenced)      --> Estimates the rotor diameters of the wind turnines missing that data, based on classification, with a log-log approach
-2.Complex_or_flat                        --> Assigns complexity to terrain based on Slope, and Terrain Ruggedness Index value
-3.Area_per_Country                       --> Calculates the area per wind park
-4.ClassificationWT_EU                    --> Reads a GIS classification map and assigins each park a class
-5.Repowering_Calculation_Stage_1_(Float) --> Calcualtes the repowered capacity of every wind park in the EU, number of turbines is a real number (Float)
-6.Approach_1_ninja_wt                    --> Calculates the repowered capacity of every wind park in the EU, number of turbines is an integer, with 4 different approaches increasing in land flexibility
+1.Rotor_diameter_(Class influenced)      : Estimates the rotor diameters of the wind turnines missing that data, based on classification, with a log-log approach
+2.Complex_or_flat                        : Assigns complexity to terrain based on Slope, and Terrain Ruggedness Index value
+3.Area_per_Country                       : Calculates the area per wind park
+4.ClassificationWT_EU                    : Reads a GIS classification map and assigins each park a class
+5.Repowering_Calculation_Stage_1_(Float) : Calcualtes the repowered capacity of every wind park in the EU, number of turbines is a real number (Float)
+6.Approach_1_ninja_wt                    : Calculates the repowered capacity of every wind park in the EU, number of turbines is an integer, with 4 different approaches increasing in land flexibility
   Approach_2_ninja_wt
   Approach_3_ninja_wt
   Approach_4_ninja_wt
-7.Repowering_Capacity_Comaprisons        --> Succesfull repowerings per country and average power increase (percentage) per apporach
-  Additional_Result_plots                --> Growth rate incorporation in cummulative EU projection to 2050, Power density per country, Comparative power density per approach, Required land area comparison (2,3,baseline)
-  Plot_Repowering_Capacity               --> Total Eu Capacity for each approach, with 1 year wind farm construction delay, Approaches comparison bar chart per country, and growth rate per approach 
+7.Repowering_Capacity_Comaprisons        : Succesfull repowerings per country and average power increase (percentage) per apporach
+  Additional_Result_plots                : Growth rate incorporation in cummulative EU projection to 2050, Power density per country, Comparative power density per approach, Required land area comparison (2,3,baseline)
+  Plot_Repowering_Capacity               : Total Eu Capacity for each approach, with 1 year wind farm construction delay, Approaches comparison bar chart per country, and growth rate per approach 
+
+#Outputs
 
 The resulting output will be an excel file with the following Columns:
 
@@ -54,24 +58,24 @@ The resulting output will be an excel file with the following Columns:
 21. Operator: Company operating the wind park.
 22. Owner: Owner of the wind park.
 23. Commissioning date: Date when the wind park began operation.
-**24. Status: Operational status of the wind park.**
+24. Status: Operational status of the wind park.
 25. Decommissioning date: Planned or actual date of decommissioning.
 26. Link: URL for additional information about the wind park.
 27. Update: Date of last data update.
-**28. Rotor Diameter: Diameter of turbine rotor blades.**
-**29. SingleWT_Capacity: Capacity of a single wind turbine (MW).**
-**30. IEC_Class: Wind turbine classification according to IEC standards.**
-**31. IEC_Class_Num: Numerical IEC classification.**
-**32. IEC_Class_Group: Grouping of IEC classification.**
-**33. TRI: Terrain Ruggedness Index value.**
-**34. Slope_deg: Average terrain slope in degrees.**
-**35. Terrain_Type: Description of terrain type (e.g., complex, flat).**
-**36. Active in 2022: Indicates whether the wind park was operational in 2022.**
-**37. Turbine Area (m²): Area occupied by a single turbine (m²).**
-**38. Total Park Area (m²): Total land area occupied by the wind park (m²).**
-**39. Recommended_WT_Model: Recommended turbine model for repowering.**
-**40. Recommended_WT_Capacity: Recommended capacity per turbine for repowering (MW).**
-**41. New_Turbine_Count: Suggested number of new turbines after repowering.**
-**42. Total_New_Capacity: Total new capacity achievable after repowering (MW).**
-**43. New_Total_Park_Area (m²): New total area occupied after repowering (m²).**
+28. Rotor Diameter: Diameter of turbine rotor blades.
+29. SingleWT_Capacity: Capacity of a single wind turbine (MW).
+30. IEC_Class: Wind turbine classification according to IEC standards.
+31. IEC_Class_Num: Numerical IEC classification.
+32. IEC_Class_Group: Grouping of IEC classification.
+33. TRI: Terrain Ruggedness Index value.
+34. Slope_deg: Average terrain slope in degrees.
+35. Terrain_Type: Description of terrain type (e.g., complex, flat).
+36. Active in 2022: Indicates whether the wind park was operational in 2022.
+37. Turbine Area (m²): Area occupied by a single turbine (m²).
+38. Total Park Area (m²): Total land area occupied by the wind park (m²).
+39. Recommended_WT_Model: Recommended turbine model for repowering.
+40. Recommended_WT_Capacity: Recommended capacity per turbine for repowering (MW).
+41. New_Turbine_Count: Suggested number of new turbines after repowering.
+42. Total_New_Capacity: Total new capacity achievable after repowering (MW).
+43. New_Total_Park_Area (m²): New total area occupied after repowering (m²).
 
