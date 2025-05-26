@@ -7,23 +7,23 @@ import rasterio
 from rasterio.warp import transform
 from pathlib import Path
 
-# Define the base directory as the directory containing this script.
+
 base_dir = Path(__file__).resolve().parent
 
-# Define the data directory (for input files) and the results directory (for output files).
+
 data_dir = base_dir / "data"
 results_dir = base_dir / "results"
 results_dir.mkdir(exist_ok=True)  # Create results folder if it does not exist.
 
 # Define the input and output file names.
-input_file = "Windfarms_World_20230530.xlsx"   # Main Excel file (should be in the data folder)
-output_file = "Windfarms_World_20230530_final_1.xlsx"  # Final output file to save in the results folder
+input_file = "Windfarms_World_20230530.xlsx"
+output_file = "Windfarms_World_20230530_final_1.xlsx"  # Final output
 
 # Construct full paths using the relative directories.
 full_input_path = data_dir / input_file
 full_output_path = results_dir / output_file
 
-# Define the TIFF file path (assumed to be in the data folder).
+
 tif_file = "gwa3_250_windspeed_100m.tif"  # IEC classification TIFF
 tif_path = data_dir / tif_file
 

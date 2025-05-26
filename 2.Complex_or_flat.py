@@ -7,10 +7,10 @@ import concurrent.futures
 import math
 from pathlib import Path
 
-# Define the base directory as the directory containing this script.
+
 base_dir = Path(__file__).resolve().parent
 
-# Define relative directories for inputs (data) and outputs (results)
+
 data_dir = base_dir / "data"
 results_dir = base_dir / "results"
 results_dir.mkdir(exist_ok=True)  # Create results folder if it doesn't exist

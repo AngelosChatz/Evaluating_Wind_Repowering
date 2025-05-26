@@ -4,15 +4,15 @@ from rasterio.warp import transform
 import numpy as np
 from pathlib import Path
 
-# Define the base directory as the directory containing this script.
+
 base_dir = Path(__file__).resolve().parent
 
-# Define directories for input (data) and output (results)
+
 data_dir = base_dir / "data"
 results_dir = base_dir / "results"
 results_dir.mkdir(exist_ok=True)  # Create results folder if it does not already exist
 
-# Set file paths relative to these directories.
+
 input_excel = results_dir / "Windfarms_World_20230530_with_IEC_Elevation_v2_area.xlsx"
 output_excel = results_dir / (input_excel.stem + "_classifications" + input_excel.suffix)
 tif_path = data_dir / "gwa3_250_windspeed_100m.tif"
@@ -63,6 +63,5 @@ iec_class_numeric = [extract_numeric_class(cl) if cl is not None else np.nan for
 df["IEC_Class"] = iec_classifications
 df["IEC_Class_Num"] = iec_class_numeric
 
-# Save the modified DataFrame to the output Excel file.
 df.to_excel(output_excel, index=False)
 print("Final data saved to:", output_excel)

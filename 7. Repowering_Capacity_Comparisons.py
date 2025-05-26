@@ -3,18 +3,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-# Define base directory and subdirectories
+
 base_dir = Path(__file__).resolve().parent
 results_dir = base_dir / "results"
 
-# File paths for each approach (Excel files stored in the results folder)
+# File paths for each approach
 file_approach_1 = results_dir / "Approach_1.xlsx"
 file_approach_2 = results_dir / "Approach_2.xlsx"
 file_approach_3 = results_dir / "Approach_3.xlsx"
 file_approach_4 = results_dir / "Approach_4.xlsx"
 file_approach_5 = results_dir / "Approach_5.xlsx"
 
-# Define approach labels (acronyms) for plotting
+# Define approach labels for plotting
 approach_labels = {
     1: "ED",   # Energy Density
     2: "CM",   # Capacity Maximization

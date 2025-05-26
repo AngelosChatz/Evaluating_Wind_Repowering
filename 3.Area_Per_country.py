@@ -15,16 +15,16 @@ def parse_custom_date(date_str):
         except ValueError:
             return pd.NaT
 
-# Set up directories: base, data (input), and results (output)
+
 base_dir = Path(__file__).resolve().parent
 results_dir = base_dir / "results"
 results_dir.mkdir(exist_ok=True)  # Create results directory if it doesn't exist
 
-# Define input and output file paths
+# input and output file paths
 input_excel = results_dir / "Windfarms_World_20230530_with_IEC_Elevation_v2.xlsx"
 output_excel = results_dir / (input_excel.stem + "_area" + input_excel.suffix)
 
-# Read data from the Excel file
+
 df = pd.read_excel(input_excel)
 
 # Parse the commissioning and decommissioning date columns
@@ -84,10 +84,10 @@ merged_density_df["Capacity Density (MW/km²)"] = (
     merged_density_df["Total power"] / merged_density_df["Park Area (km²)"]
 )
 
-# Print the aggregated capacity density results to the console
+
 print("Capacity Density (MW/km²) by Country (based on wind park area):")
 print(merged_density_df.to_string(index=False))
 
-# Save the modified DataFrame with area calculations to the output Excel file.
+
 df.to_excel(output_excel, index=False)
 print("\nFinal modified data saved to:", output_excel)

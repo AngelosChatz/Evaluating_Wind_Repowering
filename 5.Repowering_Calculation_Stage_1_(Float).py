@@ -3,10 +3,9 @@ import math
 import re
 from pathlib import Path
 
-# Define the base directory (the directory containing this script)
+
 base_dir = Path(__file__).resolve().parent
 
-# Define directories for input and output files
 results_dir = base_dir / "results"
 results_dir.mkdir(exist_ok=True)
 
@@ -14,7 +13,7 @@ results_dir.mkdir(exist_ok=True)
 input_excel = results_dir / "Windfarms_World_20230530_with_IEC_Elevation_v2_area_classifications.xlsx"
 output_excel = results_dir / "Repowering_Stage_1_float.xlsx"
 
-# List of sample turbines with properties
+
 turbines = [
     # IEC Class 1 turbines
     {"Model": "Siemens SWT 3-101", "Capacity": 3.0, "RotorDiameter": 101, "IEC_Class_Num": 1},
@@ -92,7 +91,6 @@ def main():
     else:
         print("Warning: IEC_Class_Num column not found in the Excel file.")
 
-    # Prepare lists to store the recommendation results
     recommended_models = []
     recommended_capacities = []
     new_turbine_counts = []
@@ -134,13 +132,13 @@ def main():
             new_turbine_counts.append(new_turb_count)
             total_new_capacities.append(new_total_capacity)
 
-    # Add the recommendations as new columns in the DataFrame
+
     df["Recommended_WT_Model"] = recommended_models
     df["Recommended_WT_Capacity"] = recommended_capacities
     df["New_Turbine_Count"] = new_turbine_counts
     df["Total_New_Capacity"] = total_new_capacities
 
-    # Save the updated DataFrame to Excel
+
     df.to_excel(output_excel_path, index=False)
     print(f"\nUpdated database saved to {output_excel_path}")
 
