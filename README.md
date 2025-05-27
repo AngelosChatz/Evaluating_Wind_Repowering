@@ -87,3 +87,15 @@ The resulting output will be an excel file with the following Columns:
 42. Total_New_Capacity: Total new capacity achievable after repowering (MW).
 43. New_Total_Park_Area (m²): New total area occupied after repowering (m²).
 
+
+
+After Costs_model.py is run, additional columns are produced, namely:
+
+1. CAPEX_Eur_rep         : Total Capital Expenses of each park (Eur)
+2. NPV_Eur_rep           : Net Present Value of each park (Eur)
+3. IRR_rep               : Internal Rate of Return per park (Percentage)
+4. Payback_rep           : The payback period of each park  (years)
+5. LCOE_Eur_per_MWh_rep  : Levelized Cost of Electricity (Eur/Mwh)
+
+and the same columns with _dec for decommissioned and replacement strategy data, which are calculated with the old wind turbines and the old energy yield and financial inputs
+
