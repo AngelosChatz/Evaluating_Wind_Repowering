@@ -128,7 +128,9 @@ plt.bar(range(len(sorted_npv)), sorted_npv['NPV_Eur_rep'], color='skyblue')
 plt.xlabel('Wind Parks (sorted by NPV)')
 plt.ylabel('NPV (EUR)')
 plt.title('NPV Across Wind Parks (Repowering)')
-plt.ylim(-0.25e9, 0.75e9)
+min_npv = sorted_npv['NPV_Eur_rep'].min() * 0.4
+max_npv = sorted_npv['NPV_Eur_rep'].max() * 1
+plt.ylim(min_npv, max_npv)
 plt.grid(axis='y')
 plt.show()
 
