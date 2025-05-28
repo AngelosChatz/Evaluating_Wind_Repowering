@@ -24,7 +24,7 @@ The following Data list should be created in a folder within the repository name
 
 Firstly, install the necessary libraries listed in requirements.txt and then run the submodels in the following prioritized order:
 
-|----|--------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
+
 | #  | Script Name                                | Description                                                                                                                                            |
 |----|--------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
 | 1  | Rotor_diameter_(Class influenced)          | Estimates the rotor diameters of the wind turbines missing that data, based on classification, with a log–log approach.                                |
@@ -43,7 +43,7 @@ Firstly, install the necessary libraries listed in requirements.txt and then run
 | 14 | Costs Model                                | Produces economic plots: LCoE, IRR, NPV, and payback period.                                                                                           |
 | 15 | lcoe                                       | Compares LCoE per scenario, country, and learning-rate assumption (sensitivity analysis).                                                              |
 | 16 | Additional_Result_plots                    | Plots power density per country, comparative power density per approach, and required land-area comparisons.                                           |
-|----|--------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
+
 
 
 
