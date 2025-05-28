@@ -39,6 +39,34 @@ Firstly, install the necessary libraries listed in requirements.txt and then run
 15. lcoe                                  : LCoE comparisons per scenario, country and learning rate assumption (Sensitivity analysis)
 16. Additional_Result_plots               : Power density per country, Comparative power density per approach, Required land area comparison
 
+
+
+In the following table the input, and output files of each sub-model will be presented
+
+| Script Name                                | Input File(s)                                                                                                                                              | Output File(s)                                                                                   |
+|--------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------|
+| 1. Rotor_diameter_(Class influenced)       | <ul><li>`Windfarms_World_20230530.xlsx`</li></ul>                                                                                                           | <ul><li>`Windfarms_World_20230530_final_1.xlsx`</li></ul>                                        |
+| 2. Complex_or_flat                         | <ul><li>`Windfarms_World_20230530_final_1.xlsx`</li><li>`eurodem.tif`</li></ul>                                                                              | <ul><li>`Windfarms_World_20230530_with_IEC_Elevation_v2.xlsx`</li></ul>                          |
+| 3. Area_per_Country                        | <ul><li>`Windfarms_World_20230530_with_IEC_Elevation_v2.xlsx`</li></ul>                                                                                       | <ul><li>`Windfarms_World_20230530_with_IEC_Elevation_v2_area.xlsx`</li></ul>                     |
+| 4. ClassificationWT_EU                     | <ul><li>`Windfarms_World_20230530_with_IEC_Elevation_v2_area.xlsx`</li><li>`gwa3_250_windspeed_100m.tif`</li></ul>                                          | <ul><li>`Windfarms_World_20230530_with_IEC_Elevation_v2_area_classifications.xlsx`</li></ul>     |
+| 5. Repowering_Calculation_Stage_1_(Float)  | <ul><li>`Windfarms_World_20230530_with_IEC_Elevation_v2_area_classifications.xlsx`</li></ul>                                                                 | <ul><li>`Repowering_Stage_1_float.xlsx`</li></ul>                                                |
+| 6. Approach_*_ninja_wt                     | <ul><li>`Windfarms_World_20230530_with_IEC_Elevation_v2_area_classifications.xlsx`</li></ul>                                                                 | <ul><li>`Approach_*.xlsx` (approaches 1–5)</li></ul>                                             |
+| 7. Repowering_Capacity_Comaprisons         | <ul><li>`Approach_*.xlsx` (all approaches)</li></ul>                                                                                                         | <ul><li>Plots</li></ul>                                                                          |
+| 8. Plot_Repowering_Capacity                | <ul><li>`Approach_*.xlsx` (all approaches)</li></ul>                                                                                                         | <ul><li>Plots</li></ul>                                                                          |
+| 9. Prepare_capacity_factors                | <ul><li>`Approach_*.xlsx` (one approach at a time)</li><li>`era5.nc`</li><li>`NUTS_RG_01M_2016_4326.geojson`</li><li>`custom.geo.json`</li><li>`Power Curves.csv`</li><li>`Power Curves 2.csv`</li></ul> | <ul><li>`Approach_*_Cf.xlsx`</li></ul>                                                            |
+| 10. Energy_Production_old                  | <ul><li>`Approach_*.xlsx` (any approach)</li><li>`era5.nc`</li><li>`NUTS_RG_01M_2016_4326.geojson`</li><li>`custom.geo.json`</li><li>`Power Curves.csv`</li></ul> | <ul><li>`Cf_old_updated.xlsx`</li><li>Plots</li></ul>                                             |
+| 11. Repowered_Energy_Production            | <ul><li>`Cf_old_updated.xlsx`</li></ul>                                                                                                                      | <ul><li>(Plots)</li></ul>                                                               |
+| 12. AEP_Maps                               | <ul><li>`Approach_2_Cf.xlsx`</li><li>`Cf_old_updated.xlsx`</li><li>`NUTS_RG_01M_2016_4326.geojson`</li><li>`custom.geo.json`</li></ul>                     | <ul><li>Plots</li></ul>                                                                          |
+| 13. Demand Coverage                        | <ul><li>`Approach_2_Cf.xlsx`</li><li>`Cf_old_updated.xlsx`</li></ul>                                                                                          | <ul><li>Plots</li></ul>                                                                          |
+| 14. Costs Model                            | <ul><li>`Approach_2_Cf.xlsx`</li><li>`Cf_old_updated.xlsx`</li></ul>                                                                                          | <ul><li>Plots</li></ul>                                                                          |
+| 15. lcoe                                   | <ul><li>`Approach_2_Cf.xlsx`</li><li>`Cf_old_updated.xlsx`</li></ul>                                                                                          | <ul><li>Plots</li></ul>                                                                          |
+| 16. Land_use_Results                       | <ul><li>`Approach_*.xlsx` (all approaches)</li></ul>                                                                                                         | <ul><li>Plots</li></ul>                                                                          |
+
+
+
+
+
+
 #Outputs
 
 The resulting output will be an excel file with the following Columns:
