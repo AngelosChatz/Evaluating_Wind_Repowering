@@ -57,8 +57,8 @@ df = (
 )
 
 # ─── FINANCIAL PARAMETERS ────────────────────────────────────────────────────
-BASE_CAPEX_PER_KW  = 1010.0   # €/kW repowering
-DECOM_COST_PER_KW  = 1267.1   # €/kW decommissioning
+BASE_CAPEX_PER_KW  = 1077.4
+DECOM_COST_PER_KW  = 1267.1
 OM_PER_KW_YEAR     = 30.0     # €/kW·yr
 LIFETIME           = 20       # years
 DISCOUNT_RATE      = 0.025
@@ -155,24 +155,6 @@ plt.xticks(x, cs['country'], rotation=45, ha='right')
 plt.ylabel('Avg LCOE (€/MWh)'); plt.legend(title='Strategy')
 plt.grid(axis='y', linestyle='--', alpha=0.5); plt.tight_layout(); plt.show()
 
-# ─── DEBUG OUTPUT: first 5 parks ─────────────────────────────────────────────
-print("\n*** DEBUG OUTPUT: first 5 parks ***\n")
-cf_new_list = []
-cf_old_list = []
-for _, r in df.head(5).iterrows():
-    rep_lcoe = calc_lcoe(r['energy_mwh'],     r['capacity_kw'],     BASE_CAPEX_PER_KW)
-    dec_lcoe = calc_lcoe(r['energy_mwh_old'], r['capacity_kw_old'], DECOM_COST_PER_KW)
-    per_old  = r['energy_mwh_old'] / r['turbine_count_old']
-    cf_new   = r['energy_mwh']     / (r['capacity_kw']    / 1000 * 8760)
-    cf_old   = r['energy_mwh_old'] / (r['capacity_kw_old']/ 1000 * 8760)
-    cf_new_list.append(cf_new)
-    cf_old_list.append(cf_old)
-    print(
-        f"ID {r['id']}: New→ cap {r['total_capacity_mw']:.2f} MW, prod {r['annual_energy_mwh_new']:.2f} MWh, "
-        f"CF={cf_new:.2%}, LCOE {rep_lcoe:.2f} €/MWh; "
-        f"Old→ per‐turbine prod {per_old:.1f} MWh, total prod {r['energy_mwh_old']:.1f} MWh, "
-        f"CF={cf_old:.2%}, LCOE {dec_lcoe:.2f} €/MWh"
-    )
 
 # ─── CAPACITY FACTOR COMPARISON FOR ALL PARKS ────────────────────────────────
 cf_new_all = df['energy_mwh']     / (df['capacity_kw']     / 1000 * 8760)
@@ -183,3 +165,30 @@ num_higher = (cf_new_all > cf_old_all).sum()
 total_parks = len(df)
 
 print(f"\nOut of {total_parks} parks, {num_higher} have a higher capacity factor after repowering than before.")
+
+# ─── PRINT SUMMARY FOR MODERATE (14%) SCENARIO ────────────────────────────────
+# 1) Overall averages for 14% learning rate
+mod_avg = avg_stats.loc[avg_stats['Scenario'] == 'Moderate (14%)']
+rep_avg = mod_avg['LCOE_Repowering'].values[0]
+dec_avg = mod_avg['LCOE_Decommissioning'].values[0]
+print(f"\nOverall average LCOE at 14% learning rate:")
+print(f"  • Repowering:      {rep_avg:.1f} €/MWh")
+print(f"  • Decommissioning: {dec_avg:.1f} €/MWh\n")
+
+# 2) Per-country averages for 14% (using cs from the bar chart)
+print("Average LCOE by country (Moderate 14%):")
+print(cs[['country','LCOE_Repowering','LCOE_Decommissioning']]
+      .rename(columns={
+          'country': 'Country',
+          'LCOE_Repowering': 'Repowering (€/MWh)',
+          'LCOE_Decommissioning': 'Replacement (€/MWh)'
+      })
+      .to_string(index=False, float_format="%.1f"))
+
+# ─── ENERGY YIELD COMPARISON ──────────────────────────────────────────────────
+# Count how many parks actually produce more energy after repowering
+num_higher_yield = (df['energy_mwh'] > df['energy_mwh_old']).sum()
+yield_pct        = num_higher_yield / total_parks * 100
+
+print(f"\nOut of {total_parks} parks, {num_higher_yield} "
+      f"({yield_pct:.1f}%) have a higher annual energy yield after repowering than before.")
