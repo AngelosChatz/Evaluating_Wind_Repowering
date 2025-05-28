@@ -3,33 +3,61 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+# --- Paths to your Excel files
 this_dir = Path(__file__).resolve().parent
 results_dir = this_dir / "results"
-
-
 repowered_path = results_dir / "Approach_2_Cf.xlsx"
 existing_path  = results_dir / "Cf_old_updated.xlsx"
 
+# --- 1) Load repowered ("new") data
 df = pd.read_excel(repowered_path, index_col=0)
 df["Total_New_Capacity"] = pd.to_numeric(df["Total_New_Capacity"], errors="coerce").fillna(0)
 df["CapacityFactor"]     = pd.to_numeric(df["CapacityFactor"],     errors="coerce").fillna(0)
 
+# If CFs are given as percentages (>1), convert to fractions
+df["CapacityFactor"] = df["CapacityFactor"].apply(lambda x: x/100 if x > 1 else x)
 
+# --- 2) Load baseline (old‐turbine) data
 df_old = pd.read_excel(existing_path, index_col=0)
-df_old = df_old.rename(columns={
-    "Total_New_Capacity": "Total_Baseline_Capacity",
-    "Annual_Energy_TWh":  "Annual_Energy_TWh_Baseline"
-})
-df_old["Total_Baseline_Capacity"]    = pd.to_numeric(df_old["Total_Baseline_Capacity"],    errors="coerce").fillna(0)
-df_old["Annual_Energy_TWh_Baseline"] = pd.to_numeric(df_old["Annual_Energy_TWh_Baseline"], errors="coerce").fillna(0)
 
-# = Merge old Baseline into new DataFrame
-df = df.join(df_old[["Total_Baseline_Capacity", "Annual_Energy_TWh_Baseline"]], how="left")
+# Make sure inputs are numeric
+df_old["Representative_New_Capacity"] = pd.to_numeric(
+    df_old["Representative_New_Capacity"], errors="coerce"
+).fillna(0)
+df_old["Number of turbines"] = pd.to_numeric(
+    df_old["Number of turbines"], errors="coerce"
+).fillna(0)
+df_old["Annual_Energy_TWh"] = pd.to_numeric(
+    df_old["Annual_Energy_TWh"], errors="coerce"
+).fillna(0)
 
-hours_per_year         = 8760
-df["Annual_Energy_TWh"] = df["Total_New_Capacity"] * df["CapacityFactor"] * hours_per_year / 1e6
+# Compute per‐row totals for baseline capacity (in MW) and energy (in TWh)
+df_old["Total_Baseline_Capacity"] = (
+    df_old["Representative_New_Capacity"]  # kW per turbine
+    * df_old["Number of turbines"]
+    / 1e3                                  # → MW
+)
+df_old["Annual_Energy_TWh_Baseline"] = (
+    df_old["Annual_Energy_TWh"]           # TWh per turbine
+    * df_old["Number of turbines"]
+)
 
-# === 5) Create selection columns ===
+# --- 3) Merge baseline into repowered DataFrame
+df = df.join(
+    df_old[["Total_Baseline_Capacity", "Annual_Energy_TWh_Baseline"]],
+    how="left"
+)
+
+# --- 4) Compute new‐repowered annual energy (TWh)
+hours_per_year = 8760
+df["Annual_Energy_TWh"] = (
+    df["Total_New_Capacity"]   # MW
+    * df["CapacityFactor"]     # fraction
+    * hours_per_year           # hours/year
+    / 1e6                      # → TWh
+)
+
+# --- 5) Pick the larger of baseline vs repowered energy per row
 df["Selected_by_Capacity"] = np.where(
     df["Total_Baseline_Capacity"] > df["Total_New_Capacity"],
     df["Annual_Energy_TWh_Baseline"],
@@ -41,7 +69,7 @@ df["Selected_by_Yield"] = np.where(
     df["Annual_Energy_TWh"]
 )
 
-#  Consumption  per country Data
+# --- 6) Country‐level consumption data
 consumption_data = {
     "Country": [
         "Russia","Germany","France","Italy","UK","Turkey","Spain","Poland","Sweden","Norway",
@@ -60,78 +88,66 @@ consumption_data = {
 }
 df_cons = pd.DataFrame(consumption_data)
 
-
+# --- 7) Aggregate per‐country and compute coverage %
 wind_cap = df.groupby("Country")["Selected_by_Capacity"].sum().rename("Wind_CapBased_TWh")
 wind_yld = df.groupby("Country")["Selected_by_Yield"].sum().rename("Wind_YieldBased_TWh")
 
-# Merge consumption and wind energy data
 df_comb = (
     df_cons
-    .merge(wind_cap, left_on="Country", right_index=True, how="inner")
-    .merge(wind_yld, left_on="Country", right_index=True, how="inner")
+      .merge(wind_cap, left_on="Country", right_index=True)
+      .merge(wind_yld, left_on="Country", right_index=True)
 )
-
-# Compute coverage %
-df_comb["Coverage_Cap_%"] = df_comb["Wind_CapBased_TWh"] / df_comb["Electricity_Consumption_TWh"] * 100
-df_comb["Coverage_Yld_%"] = df_comb["Wind_YieldBased_TWh"] / df_comb["Electricity_Consumption_TWh"] * 100
-
-
+df_comb["Coverage_Cap_%"] = (
+    df_comb["Wind_CapBased_TWh"] / df_comb["Electricity_Consumption_TWh"] * 100
+)
+df_comb["Coverage_Yld_%"] = (
+    df_comb["Wind_YieldBased_TWh"] / df_comb["Electricity_Consumption_TWh"] * 100
+)
 df_sorted = df_comb.sort_values("Coverage_Cap_%", ascending=False).reset_index(drop=True)
 
+# --- 8) Plot bar chart
 import matplotlib as mpl
-
-
 mpl.rcParams.update(mpl.rcParamsDefault)
 
 x     = np.arange(len(df_sorted))
 width = 0.35
-colors = ['#4c72b0', '#55a868']  # blue & green
+colors = ['#4c72b0', '#55a868']
 
 fig, ax = plt.subplots(figsize=(18, 8))
-
 fig.patch.set_facecolor('white')
 ax.set_facecolor('white')
-
 
 ax.bar(
     x - width/2,
     df_sorted["Coverage_Cap_%"],
     width=width,
     label="Baseline - Capacity-Based",
-    color=colors[0],
-    edgecolor='black',
-    linewidth=0.7
+    color=colors[0], edgecolor='black', linewidth=0.7
 )
 ax.bar(
     x + width/2,
     df_sorted["Coverage_Yld_%"],
     width=width,
-    label="Repowering NLH-Energy Yield",  # Updated label for Repowering NLH-Energy Yield
-    color=colors[1],
-    edgecolor='black',
-    linewidth=0.7
+    label="Repowering NLH-Energy Yield",
+    color=colors[1], edgecolor='black', linewidth=0.7
 )
 
-
 ax.yaxis.grid(True, linestyle='--', alpha=0.6)
-ax.xaxis.grid(False)
-
 ax.set_xticks(x)
 ax.set_xticklabels(df_sorted["Country"], rotation=45, ha='right', fontsize=10)
 ax.tick_params(axis='y', labelsize=12)
 
-
 ax.set_ylabel("Demand Coverage (%)", fontsize=14, labelpad=10)
-ax.set_title("EU Countries: Demand Coverage by Repowering Approach",
-             fontsize=18, fontweight='bold', pad=15)
-
+ax.set_title(
+    "EU Countries: Demand Coverage by Repowering Approach",
+    fontsize=18, fontweight='bold', pad=15
+)
 
 ax.legend(loc="upper right", fontsize=12, frameon=False)
-
 plt.tight_layout()
 plt.show()
 
-# Compute overall EU coverage
+# --- 9) Overall EU coverage summary
 eu_members = {
     "Germany","France","Italy","Spain","Poland","Sweden","Netherlands","Belgium",
     "Finland","Austria","Czechia","Portugal","Romania","Greece","Hungary","Bulgaria",

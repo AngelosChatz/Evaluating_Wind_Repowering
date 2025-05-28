@@ -10,7 +10,7 @@ path_spatial_units   = r"D:\SET 2023\Thesis Delft\Model\atlite_example\data\NUTS
 path_custom_geo      = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\data\custom.geo.json"
 path_cutout          = r"D:\SET 2023\Thesis Delft\Model\atlite_example\data\era5.nc"
 path_power_curve     = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\data\Power Curves.csv"
-output_path          = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\CF_old.xlsx"
+output_path          = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\CF_old_updated.xlsx"
 
 # ─── 2. Load original repowering results & spatial units ────────────────────────
 print("Loading source repowering results…")
