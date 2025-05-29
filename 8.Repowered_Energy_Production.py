@@ -237,3 +237,68 @@ for name in stats_df.index:
         energy.append(df["TWh"].sum() if "TWh" in df.columns else df["TWh_old"].sum())
 
 stats_df["AnnualEnergy (TWh)"] = energy
+
+
+# 12) Print total energy per approach (all countries combined)
+print("\nTotal Annual Energy Production per Approach (All Countries Combined):")
+print(stats_df[["AnnualEnergy (TWh)"]].rename(columns={"AnnualEnergy (TWh)": "TotalEnergy_TWh"}))
+
+
+# --- 10) Demand coverage plot for Approaches 0, 5 & 6
+
+# 10a) Define electricity consumption per country (TWh)
+consumption_data = {
+    "Country": [
+        "Russia","Germany","France","Italy","UK","Turkey","Spain","Poland","Sweden","Norway",
+        "Netherlands","Ukraine","Belgium","Finland","Austria","Czechia","Switzerland","Portugal",
+        "Romania","Greece","Hungary","Bulgaria","Denmark","Belarus","Serbia","Ireland","Slovakia",
+        "Iceland","Croatia","Slovenia","Bosnia & Herzegovina","Lithuania","Estonia","Albania",
+        "Latvia","North Macedonia","Luxembourg","Moldova","Cyprus","Montenegro","Malta",
+        "Faroe Islands","Gibraltar"
+    ],
+    "Electricity_Consumption_TWh": [
+        1020.67,512.19,431.94,301.48,288.93,287.32,232.84,167.54,131.12,124.91,
+        111.71,98.01,82.23,80.55,68.17,63.75,57.19,50.57,50.44,49.54,
+        43.83,35.47,34.30,33.79,33.49,29.72,26.35,19.33,16.73,13.52,
+        12.45,11.28,8.62,6.94,6.93,6.23,6.22,5.59,5.12,2.99,2.75,0.46,0.21
+    ]
+}
+df_cons = pd.DataFrame(consumption_data)
+
+# 10b) Extract total energy per approach from agg_df
+wind_old   = agg_df["Approach 0-Old (Decomm+Repl)"].rename("Wind_Old_TWh")
+wind_cap   = agg_df["Approach 5-No-Loss Hybrid (Cap-based)"].rename("Wind_Cap_TWh")
+wind_yield = agg_df["Approach 6-No-Loss Hybrid (Yield-based)"].rename("Wind_Yield_TWh")
+
+# 10c) Build comparison DataFrame
+df_cmp = (
+    df_cons
+      .merge(wind_old,   left_on="Country", right_index=True, how="left")
+      .merge(wind_cap,   left_on="Country", right_index=True, how="left")
+      .merge(wind_yield, left_on="Country", right_index=True, how="left")
+)
+
+# 10d) Compute coverage percentages
+df_cmp["Cov_Old_%"]   = df_cmp["Wind_Old_TWh"]   / df_cmp["Electricity_Consumption_TWh"] * 100
+df_cmp["Cov_Cap_%"]   = df_cmp["Wind_Cap_TWh"]    / df_cmp["Electricity_Consumption_TWh"] * 100
+df_cmp["Cov_Yield_%"] = df_cmp["Wind_Yield_TWh"]  / df_cmp["Electricity_Consumption_TWh"] * 100
+
+# 10e) Sort and plot
+df_plot = df_cmp.sort_values("Cov_Old_%", ascending=False).reset_index(drop=True)
+x = np.arange(len(df_plot))
+w = 0.25
+
+fig, ax = plt.subplots(figsize=(16, 8))
+ax.bar(x - w, df_plot["Cov_Old_%"],   width=w, label="Approach 0 (Old)",          edgecolor='black')
+ax.bar(x,     df_plot["Cov_Cap_%"],   width=w, label="Approach 5 (Cap-based NLH)", edgecolor='black')
+ax.bar(x + w, df_plot["Cov_Yield_%"], width=w, label="Approach 6 (Yield-based NLH)", edgecolor='black')
+
+ax.set_xticks(x)
+ax.set_xticklabels(df_plot["Country"], rotation=45, ha='right', fontsize=10)
+ax.set_ylabel("Demand Coverage (%)", fontsize=14)
+ax.set_title("EU+ Countries: Wind Demand Coverage by Approach 0, 5 & 6", fontsize=16, fontweight='bold')
+ax.yaxis.grid(True, linestyle='--', alpha=0.6)
+ax.legend(loc="upper right", fontsize=12, frameon=False)
+
+plt.tight_layout()
+plt.show()
