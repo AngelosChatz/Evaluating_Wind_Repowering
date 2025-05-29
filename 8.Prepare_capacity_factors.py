@@ -143,14 +143,14 @@ for model in rep["Recommended_WT_Model"].dropna().unique():
     cf_map    = mean_cf.set_index("shape_id")["CF"].to_dict()
     rep.loc[mask, "CapacityFactor"] = parks.loc[mask, "shape_id"].map(cf_map)
 
-# ─── 9. Compute annual yield & save ────────────────────────────────────────────
-# Make sure CapacityFactor is numeric and fill any missing with 0.0
+#  9. Compute annual yield & save
+
 rep["CapacityFactor"] = pd.to_numeric(rep["CapacityFactor"], errors="coerce").fillna(0.0)
 
-# Annual_Energy_MWh_new = Total_New_Capacity (MW) * CF (per‐unit) * 8,760 h/yr
+
 rep["Annual_Energy_MWh_new"] = (
     rep["Total_New_Capacity"].astype(float)
-  * rep["CapacityFactor"]                # already float, no .astype(...)
+  * rep["CapacityFactor"]
   * 8760.0
 )
 
