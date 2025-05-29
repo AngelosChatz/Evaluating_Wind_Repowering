@@ -27,7 +27,7 @@ Firstly, install the necessary libraries listed in requirements.txt and then run
 
 | #  | Script Name                                | Description                                                                                                                                            |
 |----|--------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1  | Rotor_diameter_(Class influenced)          | Estimates the rotor diameters of the wind turbines missing that data, based on classification, with a log–log approach.                                |
+| 1  | Rotor_diameter         | Estimates the rotor diameters of the wind turbines missing that data, based on classification, with a log–log approach.                                |
 | 2  | Complex_or_flat                            | Assigns terrain complexity based on slope and the Terrain Ruggedness Index.                                                                            |
 | 3  | Area_per_Country                           | Calculates the area per wind park.                                                                                                                     |
 | 4  | ClassificationWT_EU                        | Reads a GIS classification map and assigns each park a class.                                                                                          |
@@ -38,11 +38,10 @@ Firstly, install the necessary libraries listed in requirements.txt and then run
 | 9  | Prepare_capacity_factors                   | Computes capacity factors for each wind park using ERA5 meteorological data, turbine power curves, and NUTS-3 region boundaries.                       |
 | 10 | Energy_Production_old                      | Assigns each old turbine a representative RenewablesNinja power curve and calculates its capacity factor (same method as #9).                          |
 | 11 | Repowered_Energy_Production                | Calculates per-country and scenario energy production for repowered turbines, and relative percentage variation vs. the old fleet.                     |
-| 12 | AEP_Maps                                   | Generates energy maps: old production, repowered (approach 2 cap. max), NLH (yield-based), differences, and repowered-park locations.                  |
-| 13 | Demand Coverage                            | Plots coverage of wind energy (old vs. repowered) for the countries of interest.                                                                       |
-| 14 | Costs Model                                | Produces economic plots: LCoE, IRR, NPV, and payback period.                                                                                           |
-| 15 | lcoe                                       | Compares LCoE per scenario, country, and learning-rate assumption (sensitivity analysis).                                                              |
-| 16 | Additional_Result_plots                    | Plots power density per country, comparative power density per approach, and required land-area comparisons.                                           |
+| 12 | AEP_Maps                                   | Generates energy maps: old production, repowered (approach 2 cap. max), NLH (yield-based), differences, repowered-park locations, coverage of wind energy  |
+| 13 | Costs_Model                                | Produces economic plots: LCoE, IRR, NPV, and payback period.                                                                                           |
+| 14 | lcoe                                       | Compares LCoE per scenario, country, and learning-rate assumption (sensitivity analysis).                                                              |
+| 15 | Additional_Result_plots                    | Plots power density per country, comparative power density per approach, and required land-area comparisons.                                           |
 
 
 
@@ -51,7 +50,7 @@ In the following table the input, and output files of each sub-model will be pre
 
 | Script Name                                | Input File(s)                                                                                                                                              | Output File(s)                                                                                   |
 |--------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------|
-| 1. Rotor_diameter_(Class influenced)       | <ul><li>`Windfarms_World_20230530.xlsx`</li></ul>                                                                                                           | <ul><li>`Windfarms_World_20230530_final_1.xlsx`</li></ul>                                        |
+| 1. Rotor_diamete       | <ul><li>`Windfarms_World_20230530.xlsx`</li></ul>                                                                                                           | <ul><li>`Windfarms_World_20230530_final_1.xlsx`</li></ul>                                        |
 | 2. Complex_or_flat                         | <ul><li>`Windfarms_World_20230530_final_1.xlsx`</li><li>`eurodem.tif`</li></ul>                                                                              | <ul><li>`Windfarms_World_20230530_with_IEC_Elevation_v2.xlsx`</li></ul>                          |
 | 3. Area_per_Country                        | <ul><li>`Windfarms_World_20230530_with_IEC_Elevation_v2.xlsx`</li></ul>                                                                                       | <ul><li>`Windfarms_World_20230530_with_IEC_Elevation_v2_area.xlsx`</li></ul>                     |
 | 4. ClassificationWT_EU                     | <ul><li>`Windfarms_World_20230530_with_IEC_Elevation_v2_area.xlsx`</li><li>`gwa3_250_windspeed_100m.tif`</li></ul>                                          | <ul><li>`Windfarms_World_20230530_with_IEC_Elevation_v2_area_classifications.xlsx`</li></ul>     |
@@ -62,11 +61,10 @@ In the following table the input, and output files of each sub-model will be pre
 | 9. Prepare_capacity_factors                | <ul><li>`Approach_*.xlsx` (one approach at a time)</li><li>`era5.nc`</li><li>`NUTS_RG_01M_2016_4326.geojson`</li><li>`custom.geo.json`</li><li>`Power Curves.csv`</li><li>`Power Curves 2.csv`</li></ul> | <ul><li>`Approach_*_Cf.xlsx`</li></ul>                                                            |
 | 10. Energy_Production_old                  | <ul><li>`Approach_*.xlsx` (any approach)</li><li>`era5.nc`</li><li>`NUTS_RG_01M_2016_4326.geojson`</li><li>`custom.geo.json`</li><li>`Power Curves.csv`</li></ul> | <ul><li>`Cf_old_updated.xlsx`</li><li>Plots</li></ul>                                             |
 | 11. Repowered_Energy_Production            | <ul><li>`Cf_old_updated.xlsx`</li></ul>   <ul><li>`Approach_*.xlsx` (all approaches)`</li></ul>                                                                                                                     | <ul><li>(Plots)</li></ul>                                                               |
-| 12. AEP_Maps                               | <ul><li>`Approach_2_Cf.xlsx`</li><li>`Cf_old_updated.xlsx`</li><li>`NUTS_RG_01M_2016_4326.geojson`</li><li>`custom.geo.json`</li></ul>                     | <ul><li>Plots</li></ul>                                                                          |
-| 13. Demand Coverage                        | <ul><li>`Approach_2_Cf.xlsx`</li><li>`Cf_old_updated.xlsx`</li></ul>                                                                                          | <ul><li>Plots</li></ul>                                                                          |
-| 14. Costs Model                            | <ul><li>`Approach_2_Cf.xlsx`</li><li>`Cf_old_updated.xlsx`</li></ul>                                                                                          | <ul><li>Plots</li></ul>                                                                          |
-| 15. lcoe                                   | <ul><li>`Approach_2_Cf.xlsx`</li><li>`Cf_old_updated.xlsx`</li></ul>                                                                                          | <ul><li>Plots</li></ul>                                                                          |
-| 16. Land_use_Results                       | <ul><li>`Approach_*.xlsx` (all approaches)</li></ul>                                                                                                         | <ul><li>Plots</li></ul>                                                                          |
+| 12. AEP_Maps                               | <ul><li>`Approach_2_Cf.xlsx`</li><li>`Cf_old_updated.xlsx`</li><li>`NUTS_RG_01M_2016_4326.geojson`</li><li>`custom.geo.json`</li></ul>                     | <ul><li>Plots</li></ul>                                                                          |                                                 |
+| 13. Costs_Model                            | <ul><li>`Approach_2_Cf.xlsx`</li><li>`Cf_old_updated.xlsx`</li></ul>                                                                                          |  <ul><li>`per_park_results.xlsx`</li><li>Plots</li></ul>                                                                           |
+| 14. lcoe                                   | <ul><li>`Approach_2_Cf.xlsx`</li><li>`Cf_old_updated.xlsx`</li></ul>                                                                                          | <ul><li>Plots</li></ul>                                                                          |
+| 15. Land_use_Results                       | <ul><li>`Approach_*.xlsx` (all approaches)</li></ul>                                                                                                         | <ul><li>Plots</li></ul>                                                                          |
 
 
 
@@ -125,13 +123,14 @@ After Costs_model.py is run, additional columns are produced, namely:
 
 | #  | Column Name             | Description                                                    |
 |----|-------------------------|----------------------------------------------------------------|
-| 1  | `CAPEX_Eur_rep`         | Total capital expenditures of each park (EUR).                 |
-| 2  | `NPV_Eur_rep`           | Net present value of each park (EUR).                          |
+| 1  | `CAPEX_rep`         | Total capital expenditures of each park (EUR).                 |
+| 2  | `NPV_rep`           | Net present value of each park (EUR).                          |
 | 3  | `IRR_rep`               | Internal rate of return per park (percentage).                 |
 | 4  | `Payback_rep`           | Payback period of each park (years).                           |
-| 5  | `LCOE_Eur_per_MWh_rep`  | Levelized cost of electricity (EUR/MWh) for the repowered park.|
-
-
+| 5  | `Capacity_kW_old`  | The total capacity of the old/existing wind park(KW).|
+| 6  | `Energy_MWh_old`  | The total energy produced by the old/ existing park (MWh).|
+| 7  | `CF_old_pct`  | The capacity factor of the old installed turbines|
+| 8  | `LCOE_Eur_per_MWh_rep`  | Levelized cost of electricity (EUR/MWh) for the repowered park.|
 
 The same columns with _dec for decommissioned and replacement strategy data, which are calculated with the old wind turbines and the old energy yield and financial inputs
 
