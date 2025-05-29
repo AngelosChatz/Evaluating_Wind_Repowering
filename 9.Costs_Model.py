@@ -25,10 +25,10 @@ df_new = (
     pd.read_excel(FILE_NEW)
       .rename(columns={
           'ID':                     'ID',
-          'Total_Recommended_WT_Capacity': 'Total_Capacity_MW',
+          'Total_New_Capacity': 'Total_Capacity_MW',
           'Annual_Energy_MWh_new':  'Annual_Energy_MWh',
-          'Number of turbines':     'New_Turbine_Count',
-          'CapacityFactor':         'CF_new_pct'            # ← pull in new CF
+          'New_Turbine_Counts':     'New_Turbine_Count',
+          'CapacityFactor':         'CF_new_pct'
       })
       .reset_index(drop=True)
 )
@@ -40,7 +40,7 @@ df_old = (
           'Representative_New_Capacity':'Per_Turbine_Capacity_kW',
           'Annual_Energy_MWh':      'Annual_Energy_MWh_old',
           'Number of turbines':     'Turbine_Count_old',
-          'CapacityFactor':         'CF_old_pct'            # ← pull in old CF
+          'CapacityFactor':         'CF_old_pct'
       })
       .reset_index(drop=True)
 )
