@@ -296,7 +296,7 @@ ax.bar(x + w, df_plot["Cov_Yield_%"], width=w, label="Approach 6 (Yield-based NL
 ax.set_xticks(x)
 ax.set_xticklabels(df_plot["Country"], rotation=45, ha='right', fontsize=10)
 ax.set_ylabel("Demand Coverage (%)", fontsize=14)
-ax.set_title("EU+ Countries: Wind Demand Coverage by Approach 0, 5 & 6", fontsize=16, fontweight='bold')
+ax.set_title("EU+ Countries: Wind Demand Coverage by Approach 0, 5 & 6", fontsize=18, fontweight='bold')
 ax.yaxis.grid(True, linestyle='--', alpha=0.6)
 ax.legend(loc="upper right", fontsize=12, frameon=False)
 
