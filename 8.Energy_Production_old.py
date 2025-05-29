@@ -261,6 +261,14 @@ if mask_nan.any():
         for idx, row in joined2.iterrows():
             print(f"  • Row {idx}: CF = {row['CF']:.3f}")
 
+
+# ─── Compute new annual energy yield ───────────────────────────────────────────
+# ensure CF is numeric (fill NaNs with 0)
+rep["CapacityFactor"] = pd.to_numeric(rep["CapacityFactor"], errors="coerce").fillna(0.0)
+
+# ─── 7a. Compute new annual energy yield ────────────────────────────────────────
+rep["Annual_Energy_MWh"] = rep["Total_New_Capacity"] * rep["CapacityFactor"]*8760
+
 # ─── 7. Save final results ───────────────────────────────────────────────────────
 print("\nSaving completed CF results to:", output_path)
 rep.to_excel(output_path)

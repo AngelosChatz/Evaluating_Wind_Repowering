@@ -1,180 +1,159 @@
+#!/usr/bin/env python
 import atlite
 import pandas as pd
 import geopandas as gpd
-from pathlib import Path
 
-# 1. CONFIGURATION
-DATA_DIR            = Path("data")
-RESULTS_DIR         = Path(r"D:/SET 2023/Thesis Delft/Model/Evaluating_Wind_Repowering/results")
-REPOWER_FILE        = RESULTS_DIR / "Approach_4.xlsx"
-OUTPUT_FILE         = RESULTS_DIR / "Approach_4_Cf.xlsx"
-ERA5_FILE           = DATA_DIR / "era5.nc"
-SPATIAL_NUTS_FILE   = DATA_DIR / "NUTS_RG_01M_2016_4326.geojson"
-SPATIAL_CUSTOM_FILE = DATA_DIR / "custom.geo.json"
-POWER_CURVE_FILES   = [
-    DATA_DIR / "Power Curves.csv",
-    DATA_DIR / "Power Curves 2.csv"
-]
-DEFAULT_HUB_HEIGHT  = 100  # meters
+# ─── 1. File paths ───────────────────────────────────────────────────────────────
+path_source         = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Approach_2.xlsx"
+path_spatial_units  = r"D:\SET 2023\Thesis Delft\Model\atlite_example\data\NUTS_RG_01M_2016_4326.geojson"
+path_custom_geo     = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\data\custom.geo.json"
+path_cutout         = r"D:\SET 2023\Thesis Delft\Model\atlite_example\data\era5.nc"
 
-# These countries use the custom geometry
-USE_CUSTOM = {
-    "Ukraine",
-    "Bosnia and Herzegovina",
-    "Belarus",
-    "Kosovo",
-    "Iceland",
-    "Faroe Islands",
-    "Slovenia"
-}
+# **Two** separate power‐curve CSVs:
+path_pc1            = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\data\Power Curves.csv"
+path_pc2            = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\data\Power Curves 2.csv"
 
+output_path         = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Approach_2_Cf.xlsx"
 
-# 2. HELPERS
-def load_power_curves(paths):
-    print("  ▶ Loading power curves…")
-    dfs = []
-    for p in paths:
-        print(f"    • {p.name}")
-        df = pd.read_csv(p)
-        if df.columns[0].strip().lower() != "wind speed":
-            df = df.rename(columns={df.columns[0]: "Wind speed"})
-        dfs.append(df)
-    return dfs
+# ─── 2. Load repowering results & spatial units ────────────────────────────────
+print("Loading repowering results…")
+rep = pd.read_excel(path_source, index_col=0)
+print(f"  → {len(rep)} parks loaded")
 
-def find_turbine_config(curves, model):
-    for df in curves:
+print("Loading NUTS polygons…")
+nuts = gpd.read_file(path_spatial_units).set_index("NUTS_ID")
+
+print("Loading custom-country polygons…")
+custom_shapes = (
+    gpd.read_file(path_custom_geo)
+       .reset_index()[["index","geometry"]]
+       .rename(columns={"index":"shape_id"})
+)
+
+# ─── 3. Build parks GeoDataFrame ───────────────────────────────────────────────
+parks = gpd.GeoDataFrame(
+    rep,
+    geometry=gpd.points_from_xy(rep.Longitude, rep.Latitude),
+    crs=nuts.crs
+)
+
+USE_CUSTOM = {"Ukraine","Bosnia and Herzegovina","Belarus","Kosovo","Iceland","Faroe Islands","Slovenia"}
+parks["use_custom"] = parks["Country"].isin(USE_CUSTOM)
+
+# ─── 4. Spatial join to assign shape_id ────────────────────────────────────────
+# 4a) NUTS join
+nuts_shapes = (
+    nuts.reset_index()[["NUTS_ID","geometry"]]
+        .rename(columns={"NUTS_ID":"shape_id"})
+)
+join_n = gpd.sjoin(
+    parks[~parks.use_custom],
+    nuts_shapes,
+    how="left",
+    predicate="within"
+)
+parks.loc[join_n.index, "shape_id"] = join_n["shape_id"]
+
+# 4b) Custom join
+join_c = gpd.sjoin(
+    parks[parks.use_custom],
+    custom_shapes,
+    how="left",
+    predicate="within"
+)
+# GeoPandas calls the right-hand field "shape_id_right"
+parks.loc[join_c.index, "shape_id"] = join_c["shape_id_right"]
+
+# ─── 5. Consolidate used shapes ────────────────────────────────────────────────
+used_ids     = parks["shape_id"].dropna().unique().tolist()
+shapes_total = pd.concat(
+    [nuts_shapes.set_index("shape_id"), custom_shapes.set_index("shape_id")],
+    axis=0
+).loc[used_ids, ["geometry"]]
+
+# ─── 6. Build ERA5 cutout ───────────────────────────────────────────────────────
+print("Building ERA5 cutout…")
+margin = 0.1
+xmin, ymin, xmax, ymax = (
+    parks.geometry.x.min() - margin,
+    parks.geometry.y.min() - margin,
+    parks.geometry.x.max() + margin,
+    parks.geometry.y.max() + margin
+)
+cutout = atlite.Cutout(
+    str(path_cutout),
+    bounds=[xmin, ymin, xmax, ymax],
+    time=slice("2015-01-01","2020-12-31"),
+    module="10m_wind_speed"
+)
+
+# ─── 7. Load BOTH power-curve CSVs ──────────────────────────────────────────────
+print("Loading power curves…")
+pc_dfs = []
+for p in (path_pc1, path_pc2):
+    df = pd.read_csv(p)
+    # ensure first column is named "Wind speed"
+    first = df.columns[0].strip().lower()
+    if first in {"speed","wind speed"}:
+        df = df.rename(columns={df.columns[0]:"Wind speed"})
+    pc_dfs.append(df)
+
+def get_turbine_cfg(model):
+    """Search both dataframes for a column matching `model`."""
+    for df in pc_dfs:
         if model in df.columns:
             return {
-                "hub_height": DEFAULT_HUB_HEIGHT,
-                "V":    df["Wind speed"].tolist(),
-                "POW":  df[model].tolist(),
-                "P":    df[model].max()
+                "hub_height": 100,
+                "V": df["Wind speed"].tolist(),
+                "POW": df[model].tolist(),
+                "P":   float(df[model].max())
             }
     return None
 
+# prepare to store capacity factors
+rep["CapacityFactor"] = pd.NA
 
-# 3. MAIN
-def main():
-    print("\n--- START Capacity‐Factor Assignment ---\n")
+# ─── 8. Compute CF per turbine model ───────────────────────────────────────────
+for model in rep["Recommended_WT_Model"].dropna().unique():
+    cfg = get_turbine_cfg(model)
+    if cfg is None:
+        print(f"  ⚠ No power curve for {model}, skipping")
+        continue
 
-    # 3.1 Read repower table
-    print(f"1) Reading repower table: {REPOWER_FILE}")
-    repower = pd.read_excel(REPOWER_FILE, index_col=0)
-    print(f"   → {len(repower)} parks loaded")
-    required = {"Country","Longitude","Latitude","Recommended_WT_Model","Total_New_Capacity"}
-    if not required.issubset(repower.columns):
-        missing = required - set(repower.columns)
-        raise ValueError(f"Missing columns in {REPOWER_FILE}: {missing}")
+    mask      = rep["Recommended_WT_Model"] == model
+    pts_model = parks[mask]
+    if pts_model.empty:
+        continue
 
-    # 3.2 Load spatial layers
-    print("\n2) Loading spatial layers…")
-    nuts     = gpd.read_file(SPATIAL_NUTS_FILE).set_index("NUTS_ID")
-    custom   = gpd.read_file(SPATIAL_CUSTOM_FILE).set_index("admin")
-    print(f"   • NUTS:   {len(nuts)} polygons")
-    print(f"   • Custom: {len(custom)} polygons")
+    # build atlite layout
+    layout_df = pts_model.rename(columns={"Longitude":"x","Latitude":"y"})[
+        ["x","y","Total_New_Capacity"]
+    ]
+    layout   = cutout.layout_from_capacity_list(layout_df, col="Total_New_Capacity")
+    cf_ts    = cutout.wind(turbine=cfg, layout=layout, shapes=shapes_total, per_unit=True)
 
-    # 3.3 Build parks GeoDataFrame
-    print("\n3) Building parks GeoDataFrame…")
-    parks = gpd.GeoDataFrame(
-        repower,
-        geometry=gpd.points_from_xy(repower.Longitude, repower.Latitude),
-        crs=nuts.crs
+    # average over time and map back
+    shape_dim = [d for d in cf_ts.dims if d != "time"][0]
+    mean_cf   = (
+        cf_ts.mean(dim="time")
+             .to_dataframe(name="CF")
+             .reset_index()
+             .rename(columns={shape_dim:"shape_id"})
     )
-    parks["use_custom"] = parks["Country"].isin(USE_CUSTOM)
-    print(f"   → {parks['use_custom'].sum()} parks use custom, {len(parks)-parks['use_custom'].sum()} use NUTS")
+    cf_map    = mean_cf.set_index("shape_id")["CF"].to_dict()
+    rep.loc[mask, "CapacityFactor"] = parks.loc[mask, "shape_id"].map(cf_map)
 
-    # 3.4 Spatial‐join per layer to get shape_id
-    print("\n4) Spatial‐joining parks to assign shape_id…")
-    # prepare RHS tables with explicit shape_id column
-    nuts_shapes   = nuts.reset_index()[["NUTS_ID","geometry"]].rename(columns={"NUTS_ID":"shape_id"})
-    custom_shapes = custom.reset_index()[["admin","geometry"]].rename(columns={"admin":"shape_id"})
+# ─── 9. Compute annual yield & save ────────────────────────────────────────────
+# Make sure CapacityFactor is numeric and fill any missing with 0.0
+rep["CapacityFactor"] = pd.to_numeric(rep["CapacityFactor"], errors="coerce").fillna(0.0)
 
-    # join NUTS parks
-    join_n = gpd.sjoin(
-        parks[~parks.use_custom],
-        nuts_shapes,
-        how="left",
-        predicate="within"
-    )
-    parks.loc[join_n.index, "shape_id"] = join_n["shape_id"]
-    print(f"   • {len(join_n)} parks matched to NUTS polygons")
+# Annual_Energy_MWh_new = Total_New_Capacity (MW) * CF (per‐unit) * 8,760 h/yr
+rep["Annual_Energy_MWh_new"] = (
+    rep["Total_New_Capacity"].astype(float)
+  * rep["CapacityFactor"]                # already float, no .astype(...)
+  * 8760.0
+)
 
-    # join custom parks
-    join_c = gpd.sjoin(
-        parks[ parks.use_custom],
-        custom_shapes,
-        how="left",
-        predicate="within"
-    )
-    # GeoPandas will name the rhs shape_id column "shape_id_right"
-    parks.loc[join_c.index, "shape_id"] = join_c["shape_id_right"]
-    print(f"   • {len(join_c)} parks matched to custom polygons")
-
-    # 3.5 Build minimal shapes_total
-    used_ids     = parks["shape_id"].dropna().unique().tolist()
-    shapes_total = pd.concat(
-        [nuts_shapes.set_index("shape_id"), custom_shapes.set_index("shape_id")],
-        axis=0
-    ).loc[used_ids, ["geometry"]]
-    print(f"\n5) shapes_total contains {len(shapes_total)} unique polygons")
-
-    # 3.6 Load ERA5 and power curves
-    print("\n6) Loading ERA5 cutout & power curves…")
-    cutout = atlite.Cutout(str(ERA5_FILE))
-    curves = load_power_curves(POWER_CURVE_FILES)
-
-    # prepare output column
-    repower["CapacityFactor"] = pd.NA
-
-    # 3.7 Compute CF per turbine model
-    print("\n7) Computing CapacityFactor for each park (grouped by model)…")
-    for model in repower["Recommended_WT_Model"].dropna().unique():
-        print(f"   ▶ Model: {model}")
-        cfg = find_turbine_config(curves, model)
-        if cfg is None:
-            print("     ⚠ No power curve, skipping")
-            continue
-
-        mask      = repower["Recommended_WT_Model"] == model
-        pts_model = parks[mask]
-        print(f"     • {len(pts_model)} parks to process")
-
-        # build layout DataFrame for atlite
-        df_layout = pts_model.rename(
-            columns={"Longitude":"x","Latitude":"y"}
-        )[['x','y','Total_New_Capacity']]
-
-        # compute CF time series once
-        wl    = cutout.layout_from_capacity_list(df_layout, col="Total_New_Capacity")
-        cf_ts = cutout.wind(
-            turbine=cfg,
-            layout=wl,
-            shapes=shapes_total,
-            per_unit=True
-        )
-
-        # identify shape dimension
-        shape_dim = next(d for d in cf_ts.dims if d != "time")
-        print(f"     • CF dims: {cf_ts.dims}; using '{shape_dim}'")
-
-        # average over time
-        mean_cf = (
-            cf_ts.mean(dim="time")
-                 .to_dataframe(name="CF")
-                 .reset_index()
-                 .rename(columns={shape_dim:"shape_id"})
-        )
-
-        # map CF back to parks
-        cf_map = mean_cf.set_index("shape_id")["CF"].to_dict()
-        repower.loc[mask, "CapacityFactor"] = pts_model["shape_id"].map(cf_map)
-        print(f"     ✔ Assigned CF to {mask.sum()} parks\n")
-
-    # 3.8 Save full DataFrame with per-park CapacityFactor
-    print(f"8) Saving detailed results to {OUTPUT_FILE}")
-    repower.to_excel(OUTPUT_FILE)
-    print("\n--- DONE ---\n")
-
-
-if __name__ == "__main__":
-    main()
+print(f"\nSaving results (with CF & Annual_Energy_MWh_new) to:\n  → {output_path}")
+rep.to_excel(output_path)
+print("Done ✅")
