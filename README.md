@@ -119,6 +119,7 @@ The resulting output will be an excel file with the following Columns:
 | 43 | `New_Total_Park_Area (m²)`      | New total area occupied after repowering (m²).                     |
 
 
+
 After Costs_model.py is run, additional columns are produced, namely:
 
 | #  | Column Name             | Description                                                    |
