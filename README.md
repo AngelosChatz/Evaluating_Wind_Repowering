@@ -1,4 +1,4 @@
-#Wind Repowering Evaluation Capacity Model
+# Wind Repowering Evaluation Capacity Model
 
 This model evaluates the potential growth in wind power capacity achievable through repowering across Europe. Using a comprehensive database of existing wind parks operating on European soil, it assesses:
 
@@ -20,7 +20,7 @@ The following Data list should be created in a folder within the repository name
 
 
 
-#Running Sequence
+# Running Sequence
 
 Firstly, install the necessary libraries listed in requirements.txt and then run the submodels in the following prioritized order:
 
@@ -68,7 +68,7 @@ In the following table the input, and output files of each sub-model will be pre
 
 
 
-##FOutputs
+## Outputs
 
 The resulting output will be an excel file with the following Columns:
 
