@@ -2,17 +2,23 @@
 import atlite
 import pandas as pd
 import geopandas as gpd
+from pathlib import Path
 
-# ─── 1. File paths ────────────────────────────────────────────────────────────────
-path_source          = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Approach_2.xlsx"
-path_old_cf          = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Approach_2_Cf_old.xlsx"
-path_spatial_units   = r"D:\SET 2023\Thesis Delft\Model\atlite_example\data\NUTS_RG_01M_2016_4326.geojson"
-path_custom_geo      = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\data\custom.geo.json"
-path_cutout          = r"D:\SET 2023\Thesis Delft\Model\atlite_example\data\era5.nc"
-path_power_curve     = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\data\Power Curves.csv"
-output_path          = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\CF_old_updated.xlsx"
+# Assume this script is located in Model/Evaluating_Wind_Repowering/
+BASE_DIR = Path(__file__).parent
 
-# ─── 2. Load original repowering results & spatial units ────────────────────────
+# ─── 1. Relative file paths ────────────────────────────────────────────────────
+path_source = BASE_DIR / "results" / "Approach_2.xlsx"
+path_old_cf = BASE_DIR / "results" / "Approach_2_Cf_old.xlsx"
+path_spatial_units = BASE_DIR / "data" / "NUTS_RG_01M_2016_4326.geojson"
+path_custom_geo = BASE_DIR / "data" / "custom.geo.json"
+path_cutout = BASE_DIR / "data" / "era5.nc"
+path_power_curve = BASE_DIR / "data" / "Power Curves.csv"
+output_path = BASE_DIR / "results" / "CF_old_updated.xlsx"
+
+# ─── 2. Load original repowering results & spatial units ───────────────────────
+# (e.g. pandas.read_excel(path_source) or geopandas.read_file(path_spatial_units), etc.)
+
 print("Loading source repowering results…")
 rep = pd.read_excel(path_source, sheet_name="Sheet1", index_col=0)
 spatial = gpd.read_file(path_spatial_units).set_index("NUTS_ID")

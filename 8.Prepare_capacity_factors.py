@@ -2,18 +2,22 @@
 import atlite
 import pandas as pd
 import geopandas as gpd
+from pathlib import Path
 
-# ─── 1. File paths ───────────────────────────────────────────────────────────────
-path_source         = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Approach_2.xlsx"
-path_spatial_units  = r"D:\SET 2023\Thesis Delft\Model\atlite_example\data\NUTS_RG_01M_2016_4326.geojson"
-path_custom_geo     = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\data\custom.geo.json"
-path_cutout         = r"D:\SET 2023\Thesis Delft\Model\atlite_example\data\era5.nc"
+# ─── 1. Define base directory and build relative paths ────────────────────────
+BASE_DIR = Path(__file__).resolve().parent
+
+path_source         = BASE_DIR / "results" / "Approach_2.xlsx"
+path_spatial_units  = BASE_DIR/ "data" / "NUTS_RG_01M_2016_4326.geojson"
+path_custom_geo     = BASE_DIR / "data" / "custom.geo.json"
+path_cutout         = BASE_DIR / "data" / "era5.nc"
 
 # **Two** separate power‐curve CSVs:
-path_pc1            = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\data\Power Curves.csv"
-path_pc2            = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\data\Power Curves 2.csv"
+path_pc1            = BASE_DIR / "data" / "Power Curves.csv"
+path_pc2            = BASE_DIR / "data" / "Power Curves 2.csv"
 
-output_path         = r"D:\SET 2023\Thesis Delft\Model\Evaluating_Wind_Repowering\results\Approach_2_Cf.xlsx"
+# Where to save the output
+output_path         = BASE_DIR / "results" / "Approach_2_Cf.xlsx"
 
 # ─── 2. Load repowering results & spatial units ────────────────────────────────
 print("Loading repowering results…")
@@ -26,8 +30,8 @@ nuts = gpd.read_file(path_spatial_units).set_index("NUTS_ID")
 print("Loading custom-country polygons…")
 custom_shapes = (
     gpd.read_file(path_custom_geo)
-       .reset_index()[["index","geometry"]]
-       .rename(columns={"index":"shape_id"})
+       .reset_index()[["index", "geometry"]]
+       .rename(columns={"index": "shape_id"})
 )
 
 # ─── 3. Build parks GeoDataFrame ───────────────────────────────────────────────
@@ -37,14 +41,14 @@ parks = gpd.GeoDataFrame(
     crs=nuts.crs
 )
 
-USE_CUSTOM = {"Ukraine","Bosnia and Herzegovina","Belarus","Kosovo","Iceland","Faroe Islands","Slovenia"}
+USE_CUSTOM = {"Ukraine", "Bosnia and Herzegovina", "Belarus", "Kosovo", "Iceland", "Faroe Islands", "Slovenia"}
 parks["use_custom"] = parks["Country"].isin(USE_CUSTOM)
 
 # ─── 4. Spatial join to assign shape_id ────────────────────────────────────────
 # 4a) NUTS join
 nuts_shapes = (
-    nuts.reset_index()[["NUTS_ID","geometry"]]
-        .rename(columns={"NUTS_ID":"shape_id"})
+    nuts.reset_index()[["NUTS_ID", "geometry"]]
+        .rename(columns={"NUTS_ID": "shape_id"})
 )
 join_n = gpd.sjoin(
     parks[~parks.use_custom],
@@ -83,19 +87,19 @@ xmin, ymin, xmax, ymax = (
 cutout = atlite.Cutout(
     str(path_cutout),
     bounds=[xmin, ymin, xmax, ymax],
-    time=slice("2015-01-01","2020-12-31"),
+    time=slice("2015-01-01", "2020-12-31"),
     module="10m_wind_speed"
 )
 
-# ─── 7. Load BOTH power-curve CSVs ──────────────────────────────────────────────
+# ─── 7. Load BOTH power‐curve CSVs ──────────────────────────────────────────────
 print("Loading power curves…")
 pc_dfs = []
 for p in (path_pc1, path_pc2):
     df = pd.read_csv(p)
     # ensure first column is named "Wind speed"
     first = df.columns[0].strip().lower()
-    if first in {"speed","wind speed"}:
-        df = df.rename(columns={df.columns[0]:"Wind speed"})
+    if first in {"speed", "wind speed"}:
+        df = df.rename(columns={df.columns[0]: "Wind speed"})
     pc_dfs.append(df)
 
 def get_turbine_cfg(model):
@@ -126,8 +130,8 @@ for model in rep["Recommended_WT_Model"].dropna().unique():
         continue
 
     # build atlite layout
-    layout_df = pts_model.rename(columns={"Longitude":"x","Latitude":"y"})[
-        ["x","y","Total_New_Capacity"]
+    layout_df = pts_model.rename(columns={"Longitude":"x", "Latitude":"y"})[
+        ["x", "y", "Total_New_Capacity"]
     ]
     layout   = cutout.layout_from_capacity_list(layout_df, col="Total_New_Capacity")
     cf_ts    = cutout.wind(turbine=cfg, layout=layout, shapes=shapes_total, per_unit=True)
@@ -138,15 +142,13 @@ for model in rep["Recommended_WT_Model"].dropna().unique():
         cf_ts.mean(dim="time")
              .to_dataframe(name="CF")
              .reset_index()
-             .rename(columns={shape_dim:"shape_id"})
+             .rename(columns={shape_dim: "shape_id"})
     )
     cf_map    = mean_cf.set_index("shape_id")["CF"].to_dict()
     rep.loc[mask, "CapacityFactor"] = parks.loc[mask, "shape_id"].map(cf_map)
 
 #  9. Compute annual yield & save
-
 rep["CapacityFactor"] = pd.to_numeric(rep["CapacityFactor"], errors="coerce").fillna(0.0)
-
 
 rep["Annual_Energy_MWh_new"] = (
     rep["Total_New_Capacity"].astype(float)

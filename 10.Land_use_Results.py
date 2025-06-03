@@ -192,3 +192,78 @@ plt.title("Required Land Area Comparison (Approaches 1–5)")
 plt.legend(ncol=3)
 plt.tight_layout()
 plt.show()
+
+
+# SECTION 5: SAVED LAND AREA WITH REPOWERING
+# -----------------------------------------
+# ld already has columns R1 … R5 = km² that would have been needed under original density,
+# but are “saved” because we repower on the existing footprint.
+
+# 1) Sum up the saved km² per approach
+saved_areas = {}
+for a in [1, 2, 3, 4, 5]:
+    saved_areas[f'Approach {a}'] = ld[f'R{a}'].sum()
+
+# 2) Turn into a DataFrame and display
+saved_df = (
+    pd.DataFrame.from_dict(saved_areas, orient='index', columns=['Saved_Area_km2'])
+      .reset_index()
+      .rename(columns={'index': 'Approach'})
+)
+print("Total km² saved by repowering per approach:")
+print(saved_df)
+
+# 3) (Optional) bar‐chart of saved area
+plt.figure(figsize=(8, 5))
+plt.bar(saved_df['Approach'], saved_df['Saved_Area_km2'])
+plt.ylabel("Saved Area (km²)")
+plt.title("Total km² Saved by Repowering (Approaches 1–5)")
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+plt.show()
+
+
+# SECTION 6: AVERAGE POWER DENSITY – Baseline vs. Repowered
+# --------------------------------------------------------
+avg_density = []
+for a in [1, 2, 3, 4, 5]:
+    # --- Baseline density (MW/km²) ---
+    df_o = pd.read_excel(files[f'Approach {a}']).replace({'#ND': np.nan, '': np.nan})
+    df_o = to_numeric_col(df_o, 'Total power')
+    df_o = to_numeric_col(df_o, 'Total Park Area (m²)')
+    df_o = df_o[(df_o['Total power'] > 0) & (df_o['Total Park Area (m²)'] > 0)]
+    total_power = df_o['Total power'].sum()                # in MW
+    total_area_km2 = df_o['Total Park Area (m²)'].sum() / 1e6  # in km²
+    baseline_density = total_power / total_area_km2 if total_area_km2 > 0 else np.nan
+
+    # --- Repowered density (MW/km²) ---
+    df_r = pd.read_excel(files[f'Approach {a}']).replace({'#ND': np.nan, '': np.nan})
+    df_r = to_numeric_col(df_r, 'Total_New_Capacity')
+    df_r = to_numeric_col(df_r, 'New_Total_Park_Area (m²)')
+    df_r = df_r[df_r['Total_New_Capacity'] > 0]
+    rep_power = df_r['Total_New_Capacity'].sum()           # in MW
+    rep_area_km2 = df_r['New_Total_Park_Area (m²)'].sum() / 1e6  # in km²
+    repowered_density = rep_power / rep_area_km2 if rep_area_km2 > 0 else np.nan
+
+    avg_density.append({
+        'Approach': f'Approach {a}',
+        'Baseline_MW_per_km2': baseline_density,
+        'Repowered_MW_per_km2': repowered_density
+    })
+
+avg_density_df = pd.DataFrame(avg_density)
+print("Average power density (MW/km²) per approach:")
+print(avg_density_df)
+
+# Optional: visualize as a grouped bar chart
+plt.figure(figsize=(8, 5))
+x = np.arange(len(avg_density_df))
+width = 0.35
+plt.bar(x - width/2, avg_density_df['Baseline_MW_per_km2'], width, label='Baseline')
+plt.bar(x + width/2, avg_density_df['Repowered_MW_per_km2'], width, label='Repowered')
+plt.xticks(x, avg_density_df['Approach'], rotation=45, ha='right')
+plt.ylabel("Power Density (MW/km²)")
+plt.title("Average Power Density: Baseline vs. Repowered")
+plt.legend()
+plt.tight_layout()
+plt.show()
