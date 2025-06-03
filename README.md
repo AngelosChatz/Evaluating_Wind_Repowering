@@ -6,7 +6,7 @@ This model evaluates the potential growth in wind power capacity achievable thro
 2. Economic Model
 3. Land-use Model
 
-##Getting Started
+## Getting Started
 
 
 The following Data list should be created in a folder within the repository named data. 
