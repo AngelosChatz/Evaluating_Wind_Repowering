@@ -331,76 +331,6 @@ plt.title("% Capacity In-The-Money vs Electricity Price")
 plt.xlabel("€/MWh"); plt.ylabel("% of Capacity")
 plt.legend(); plt.grid(True); plt.tight_layout(); plt.show()
 
-# ─── M) Three-Panel Boxplots: NPV, CAPEX, and IRR ─────────────────────────────
-fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-width = 0.3
-
-for i, (ax, (metric, label)) in enumerate(zip(axes, [('NPV', 'NPV'), ('CAPEX', 'CAPEX'), ('IRR', 'IRR')])):
-    bd = []
-    for scen, col in [('rep', 'skyblue'), ('dec', 'orange')]:
-        data = df[f"{metric}_{scen}"].dropna()
-        q1, med, q3 = np.percentile(data, [25, 50, 75])
-        iqr = q3 - q1
-        bd.append({
-            'label': scen,
-            'q1': q1, 'med': med, 'q3': q3,
-            'whislo': q1 - 1.5 * iqr, 'whishi': q3 + 1.5 * iqr,
-            'fliers': []
-        })
-    bp = ax.bxp(
-        bd,
-        positions=[1, 1 + width],
-        widths=width,
-        showfliers=False,
-        patch_artist=True
-    )
-    for patch, c in zip(bp['boxes'], ['skyblue', 'orange']):
-        patch.set_facecolor(c)
-
-    ax.set_xticks([1 + width / 2])
-    ax.set_xticklabels([label])
-    ax.set_title(f"{label} Comparison")
-    # move the legend of the first subplot to the top-left corner
-    loc = 'upper left' if i == 0 else 'best'
-    ax.legend(
-        [mpatches.Patch(facecolor='skyblue'), mpatches.Patch(facecolor='orange')],
-        ['Repowering', 'Decommissioning'],
-        title='Scenario',
-        loc=loc
-    )
-    ax.grid(True)
-
-plt.tight_layout()
-plt.show()
-
-
-# ─── DEBUG SANITY CHECK FOR FIRST 5 PARKS ─────────────────────────────────────
-print("\n\n=== SANITY CHECK: FIRST 5 PARKS ===\n")
-for i, r in df.head(5).iterrows():
-    # basics
-    cap_new   = r['Capacity_kW']
-    eng_new   = r['Energy_MWh']
-    cap_old   = r['Capacity_kW_old']
-    eng_old   = r['Energy_MWh_old']
-    cf_new    = eng_new / (cap_new/1000 * 8760)
-    cf_old    = eng_old / (cap_old/1000 * 8760)
-
-    # financials at default price
-    rep = repowering_metrics(r)
-    dec = decommissioning_metrics(r)
-
-    print(f"Park ID {r['ID']}:")
-    print(f"  → NEW  cap = {cap_new:,.0f} kW, energy = {eng_new:,.0f} MWh, CF = {cf_new:.2%}")
-    print(f"           CAPEX = €{rep['CAPEX']:,.0f},  O&M = €{rep['OM']:,.0f}/yr,")
-    print(f"           Rev@€{DEFAULT_ELEC_PRICE}/MWh = €{rep['Revenue']:,.0f}/yr")
-    print(f"           NPV = €{rep['NPV']:,.0f},  IRR = {rep['IRR']:.1%},  LCOE = €{rep['LCOE']:.1f}/MWh")
-    print(f"  → OLD  cap = {cap_old:,.0f} kW, energy = {eng_old:,.0f} MWh, CF = {cf_old:.2%}")
-    print(f"           CAPEX = €{dec['CAPEX']:,.0f},  O&M = €{dec['OM']:,.0f}/yr,")
-    print(f"           Rev@€{DEFAULT_ELEC_PRICE}/MWh = €{dec['Revenue']:,.0f}/yr")
-    print(f"           NPV = €{dec['NPV']:,.0f},  IRR = {dec['IRR']:.1%},  LCOE = €{dec['LCOE']:.1f}/MWh\n")
-
-
-
 # ─── EXPORT PER-PARK RESULTS TO NEW EXCEL ──────────────────────────────────────
 # Ensure CFs are computed
 df['CF_old_pct'] = df['Energy_MWh_old'] / (df['Capacity_kW_old']/1000 * 8760) * 100
@@ -423,3 +353,102 @@ out_cols = [
 park_results_file = RESULTS_DIR / "per_park_results.xlsx"
 df.to_excel(park_results_file, columns=out_cols, index=False)
 print(f"Wrote per-park results for both strategies to {park_results_file}")
+# ─── (A) SINGLE PANEL: CAPEX BOXPLOT WITH CLAMPED WHISKERS ───────────────────
+width = 0.3
+
+capex_rep = df['CAPEX_rep'].dropna().values
+capex_dec = df['CAPEX_dec'].dropna().values
+
+def make_box_stat(data):
+    q1, med, q3 = np.percentile(data, [25, 50, 75])
+    iqr = q3 - q1
+    lo = max(data.min(), q1 - 1.5 * iqr)
+    hi = min(data.max(), q3 + 1.5 * iqr)
+    return {
+        'label':  None,
+        'q1':     q1,
+        'med':    med,
+        'q3':     q3,
+        'whislo': lo,
+        'whishi': hi,
+        'fliers': []  # we’re not plotting individual outliers here
+    }
+
+bd_capex = [make_box_stat(capex_rep), make_box_stat(capex_dec)]
+
+fig_capex, ax_capex = plt.subplots(figsize=(8, 6))
+bp_capex = ax_capex.bxp(
+    bd_capex,
+    positions=[1, 1 + width],
+    widths=width,
+    showfliers=False,
+    patch_artist=True
+)
+for patch, color in zip(bp_capex['boxes'], ['skyblue', 'orange']):
+    patch.set_facecolor(color)
+
+ax_capex.set_xticks([1 + width/2])
+ax_capex.set_xticklabels(['CAPEX'], fontsize=12)
+ax_capex.set_ylabel('CAPEX (€)', fontsize=12)
+ax_capex.set_title('CAPEX: Repowering vs. Decommissioning', fontsize=14)
+
+leg_handles = [
+    mpatches.Patch(facecolor='skyblue', label='Repowering'),
+    mpatches.Patch(facecolor='orange',   label='Decommissioning')
+]
+ax_capex.legend(handles=leg_handles, title='Scenario', loc='upper left')
+ax_capex.grid(axis='y', linestyle='--', alpha=0.4)
+
+plt.tight_layout()
+plt.show()
+
+
+# ─── (B) TWO-PANEL: NPV & IRR (also with clamped whiskers) ───────────────────
+npv_rep = df['NPV_rep'].dropna().values
+npv_dec = df['NPV_dec'].dropna().values
+irr_rep = df['IRR_rep'].dropna().values
+irr_dec = df['IRR_dec'].dropna().values
+
+bd_npv = [make_box_stat(npv_rep), make_box_stat(npv_dec)]
+bd_irr = [make_box_stat(irr_rep), make_box_stat(irr_dec)]
+
+fig, (ax_npv, ax_irr) = plt.subplots(1, 2, figsize=(16, 6))
+width = 0.3
+
+# NPV subplot
+bp_npv = ax_npv.bxp(
+    bd_npv,
+    positions=[1, 1 + width],
+    widths=width,
+    showfliers=False,
+    patch_artist=True
+)
+for patch, color in zip(bp_npv['boxes'], ['skyblue', 'orange']):
+    patch.set_facecolor(color)
+
+ax_npv.set_xticks([1 + width/2])
+ax_npv.set_xticklabels(['NPV'], fontsize=12)
+ax_npv.set_ylabel('NPV (€)', fontsize=12)
+ax_npv.set_title('NPV: Repowering vs. Decommissioning', fontsize=14)
+ax_npv.grid(axis='y', linestyle='--', alpha=0.4)
+ax_npv.legend(handles=leg_handles, title='Scenario', loc='upper left')
+
+# IRR subplot
+bp_irr = ax_irr.bxp(
+    bd_irr,
+    positions=[1, 1 + width],
+    widths=width,
+    showfliers=False,
+    patch_artist=True
+)
+for patch, color in zip(bp_irr['boxes'], ['skyblue', 'orange']):
+    patch.set_facecolor(color)
+
+ax_irr.set_xticks([1 + width/2])
+ax_irr.set_xticklabels(['IRR'], fontsize=12)
+ax_irr.set_ylabel('IRR', fontsize=12)
+ax_irr.set_title('IRR: Repowering vs. Decommissioning', fontsize=14)
+ax_irr.grid(axis='y', linestyle='--', alpha=0.4)
+
+plt.tight_layout()
+plt.show()
