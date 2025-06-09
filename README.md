@@ -27,7 +27,7 @@ Firstly, install the necessary libraries listed in requirements.txt and then run
 
 | #  | Script Name                                | Description                                                                                                                                            |
 |----|--------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1  | Rotor_diameter         | Estimates the rotor diameters of the wind turbines missing that data, based on classification, with a log–log approach.                                |
+| 1  | Rotor_diameter                             | Estimates the rotor diameters of the wind turbines missing that data, based on classification, with a log–log approach.                                |
 | 2  | Complex_or_flat                            | Assigns terrain complexity based on slope and the Terrain Ruggedness Index.                                                                            |
 | 3  | Area_per_Country                           | Calculates the area per wind park.                                                                                                                     |
 | 4  | ClassificationWT_EU                        | Reads a GIS classification map and assigns each park a class.                                                                                          |
@@ -37,7 +37,7 @@ Firstly, install the necessary libraries listed in requirements.txt and then run
 | 8  | Plot_Repowering_Capacity                   | Plots total EU capacity for each approach (with a 1-year construction delay), comparison bar charts per country, and growth rates.                     |
 | 9  | Prepare_capacity_factors                   | Computes capacity factors for each wind park using ERA5 meteorological data, turbine power curves, and NUTS-3 region boundaries.                       |
 | 10 | Energy_Production_old                      | Assigns each old turbine a representative RenewablesNinja power curve and calculates its capacity factor (same method as #9).                          |
-| 11 | Repowered_Energy_Production                | Calculates per-country and scenario energy production for repowered turbines, and relative percentage variation vs. the old fleet.                     |
+| 11 | Repowered_Energy_Production                | Calculates per-country and scenario energy production for repowered turbines, and relative percentage variation vs. the old fleet+ energy density      |
 | 12 | AEP_Maps                                   | Generates energy maps: old production, repowered (approach 2 cap. max), NLH (yield-based), differences, repowered-park locations, coverage of wind energy  |
 | 13 | Costs_Model                                | Produces economic plots: LCoE, IRR, NPV, and payback period.                                                                                           |
 | 14 | lcoe                                       | Compares LCoE per scenario, country, and learning-rate assumption (sensitivity analysis).                                                              |
