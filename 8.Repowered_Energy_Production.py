@@ -3,36 +3,41 @@ import glob
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import datetime
 from pathlib import Path
 
+# --- Helper: detect column by keyword in DataFrame ---
+def detect_col(df, keyword):
+    key = keyword.lower()
+    for c in df.columns:
+        norm = c.lower().replace('_', ' ')
+        # strip any parenthetical
+        norm = pd.Series([norm]).str.replace(r"\s*\(.*\)", '', regex=True)[0].strip()
+        if key in norm:
+            return c
+    raise KeyError(f"No column containing '{keyword}'")
 
-# Setup relative paths
+# --- Setup relative paths ---
 this_dir = Path(__file__).resolve().parent
 results_dir = this_dir / "results"
 
-# Approach 0 (old)
+# --- Section 0: Load and process Approach 0 (old) ---
 old_fp = results_dir / "Cf_old_updated.xlsx"
 df_old = pd.read_excel(old_fp, index_col=0)
 
 df_old["RepCap_kW"]   = pd.to_numeric(df_old["Representative_New_Capacity"], errors="coerce").fillna(0)
-df_old["NumTurbines"] = pd.to_numeric(df_old["Number of turbines"], errors="coerce").fillna(0)
-df_old["CF_pct"]      = pd.to_numeric(df_old["CapacityFactor"], errors="coerce").fillna(0)
-
+df_old["NumTurbines"] = pd.to_numeric(df_old["Number of turbines"],        errors="coerce").fillna(0)
+df_old["CF_pct"]      = pd.to_numeric(df_old["CapacityFactor"],              errors="coerce").fillna(0)
 df_old["TotalCap_kW"] = df_old["RepCap_kW"] * df_old["NumTurbines"]
 df_old["TotalCap_MW"] = df_old["TotalCap_kW"] / 1e3
+df_old["TWh_old"]     = df_old["TotalCap_MW"] * df_old["CF_pct"] * 8760 / 1e6  # TWh
 
-df_old["TWh_old"] = df_old["TotalCap_MW"] * df_old["CF_pct"] * 8760 / 1e6  # TWh
-
-
-# Initialize aggregation dict and scenario_dfs dict
 agg = {
     "Approach 0-Old (Decomm+Repl)": df_old.groupby("Country")["TWh_old"].sum()
 }
-scenario_dfs = {
-    "Approach 0-Old (Decomm+Repl)": df_old.copy()
-}
+scenario_dfs = {"Approach 0-Old (Decomm+Repl)": df_old.copy()}
 
-# 4) Load each Approach_1–4 repowering scenario, convert to TWh, the 5th scenario is formulated internally
+# --- Section 1–4: Load Approaches 1–4 ---
 pattern = os.path.join(results_dir, "Approach_*_Cf.xlsx")
 name_map = {
     "Approach_1_Cf.xlsx": "Approach 1-Power Density",
@@ -50,57 +55,35 @@ for fp in glob.glob(pattern):
         continue
 
     df = pd.read_excel(fp, index_col=0)
-    df["CF"]     = pd.to_numeric(df["CapacityFactor"],     errors="coerce").fillna(0)  # CF is already decimal
+    df["CF"]     = pd.to_numeric(df["CapacityFactor"],     errors="coerce").fillna(0)
     df["Cap_MW"] = pd.to_numeric(df["Total_New_Capacity"], errors="coerce").fillna(0)
-    df["TWh"]    = df["Cap_MW"] * df["CF"] * 8760 / 1e6  # Divide by 1e6 to convert to TWh
+    df["TWh"]    = df["Cap_MW"] * df["CF"] * 8760 / 1e6
 
     agg[label] = df.groupby("Country")["TWh"].sum()
     scenario_dfs[label] = df.copy()
 
-# 5) Prepare Approach_2 frame for the two hybrids
-fp2 = os.path.join(results_dir, "Approach_2_Cf.xlsx")
+# --- Section 5: Build No-Loss Hybrids (Approaches 5 & 6) ---
+fp2 = results_dir / "Approach_2_Cf.xlsx"
 df_nlh = pd.read_excel(fp2, index_col=0)
-df_nlh["CF"]      = pd.to_numeric(df_nlh["CapacityFactor"],     errors="coerce").fillna(0)  # CF is already decimal
+df_nlh["CF"]      = pd.to_numeric(df_nlh["CapacityFactor"],     errors="coerce").fillna(0)
 df_nlh["Cap_MW"]  = pd.to_numeric(df_nlh["Total_New_Capacity"], errors="coerce").fillna(0)
-df_nlh["TWh_new"] = df_nlh["Cap_MW"] * df_nlh["CF"] * 8760 / 1e6  # Divide by 1e6 to convert to TWh
+df_nlh["TWh_new"] = df_nlh["Cap_MW"] * df_nlh["CF"] * 8760 / 1e6
 
-# 5a) No-Loss Hybrid (Yield-based)
+# 5a) Yield-based → Approach 6
 df_yield = df_nlh.join(df_old["TWh_old"], how="left")
-df_yield["TWh_yield"] = np.where(
-    df_yield["TWh_old"] > df_yield["TWh_new"],
-    df_yield["TWh_old"],
-    df_yield["TWh_new"]
-)
+df_yield["TWh_yield"] = np.where(df_yield["TWh_old"] > df_yield["TWh_new"],
+                                  df_yield["TWh_old"], df_yield["TWh_new"])
 agg["Approach 6-No-Loss Hybrid (Yield-based)"] = df_yield.groupby("Country")["TWh_yield"].sum()
 scenario_dfs["Approach 6-No-Loss Hybrid (Yield-based)"] = df_yield.copy()
 
-# Create a new DataFrame for the Approach 6 results and save it to a new Excel file
-df_yield["Approach"] = np.where(
-    df_yield["TWh_yield"] > df_yield["TWh_old"],  # If yield is greater than the old value, it's considered 'repowered'
-    "repowered",
-    "DnR"  # Else, it's decommissioned and replaced
-)
-
-# Save to a new Excel file
-output_fp = os.path.join(results_dir, "Approach_6_No_Loss_Hybrid_Yield_based.xlsx")
-df_yield.to_excel(output_fp)
-
-print(f"Approach 6-No-Loss Hybrid (Yield-based) results saved to {output_fp}")
-
-# 5b) No-Loss Hybrid (Capacity-based)
-df_cap = df_nlh.join(
-    df_old[["TotalCap_MW", "TWh_old"]],
-    how="left"
-)
-df_cap["TWh_cap_based"] = np.where(
-    df_cap["TotalCap_MW"] > df_cap["Cap_MW"],
-    df_cap["TWh_old"],
-    df_cap["TWh_new"]
-)
+# 5b) Cap-based → Approach 5
+df_cap = df_nlh.join(df_old[["TotalCap_MW", "TWh_old"]], how="left")
+df_cap["TWh_cap_based"] = np.where(df_cap["TotalCap_MW"] > df_cap["Cap_MW"],
+                                   df_cap["TWh_old"], df_cap["TWh_new"])
 agg["Approach 5-No-Loss Hybrid (Cap-based)"] = df_cap.groupby("Country")["TWh_cap_based"].sum()
 scenario_dfs["Approach 5-No-Loss Hybrid (Cap-based)"] = df_cap.copy()
 
-# 6) Combine into a single DataFrame for energy plots
+# --- Section 6: Aggregate for plotting ---
 agg_df = pd.DataFrame(agg).fillna(0)
 plot_cols = [
     "Approach 0-Old (Decomm+Repl)",
@@ -113,86 +96,63 @@ plot_cols = [
 ]
 agg_df = agg_df[plot_cols].sort_values("Approach 2-Capacity Maximization", ascending=False)
 
-# 7) Plot absolute annual energy (TWh) by country
+scenario_colors = {
+    col: clr for col, clr in zip(plot_cols,
+    ["black","blue","orange","green","red","brown","purple"])
+}
+COLOR_MARKER = 'red'
+
+# --- Section 7: Absolute Annual Energy by Scenario ---
 x     = np.arange(len(agg_df))
 n     = len(plot_cols)
 width = 0.8 / n
-scenario_colors = {
-    "Approach 0-Old (Decomm+Repl)":      "black",
-    "Approach 1-Power Density":          "blue",
-    "Approach 2-Capacity Maximization":  "orange",
-    "Approach 3-Rounding Up":            "green",
-    "Approach 4-Single Turbine Flex":    "red",
-    "Approach 5-No-Loss Hybrid (Cap-based)": "brown",
-    "Approach 6-No-Loss Hybrid (Yield-based)": "purple"
-}
-legend_fs = 9
-label_fs  = 11
-title_fs  = 14
-tick_rot  = 45
-tick_ha   = 'right'
-alpha_val = 0.8
-
 fig, ax = plt.subplots(figsize=(14, 6))
 for i, col in enumerate(plot_cols):
-    ax.bar(
-        x + (i - (n-1)/2) * width,
-        agg_df[col],
-        width,
-        label=col,
-        color=scenario_colors[col],
-        alpha=alpha_val
-    )
+    ax.bar(x + (i - (n-1)/2) * width,
+           agg_df[col],
+           width,
+           label=col,
+           color=scenario_colors[col],
+           alpha=0.8)
 ax.set_xticks(x)
-ax.set_xticklabels(agg_df.index, rotation=tick_rot, ha=tick_ha, fontsize=label_fs)
-ax.set_ylabel('Annual Energy Production (TWh)', fontsize=label_fs)
-ax.set_title('Energy by Scenario per Country (All Approaches)', fontsize=title_fs)
-ax.legend(loc='upper right', fontsize=legend_fs)
+ax.set_xticklabels(agg_df.index, rotation=45, ha='right', fontsize=11)
+ax.set_ylabel('Annual Energy Production (TWh)', fontsize=11)
+ax.set_title('Energy by Scenario per Country (All Approaches)', fontsize=14)
+ax.legend(loc='upper right', fontsize=9)
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 plt.tight_layout()
 plt.show()
 
-# 8) Plot relative percentage increase over old baseline
+# --- Section 8: Relative Percentage Increase over Old Baseline ---
 baseline = agg_df["Approach 0-Old (Decomm+Repl)"]
 rel_cols = plot_cols[1:]
-
 fig, ax = plt.subplots(figsize=(14, 6))
 for i, col in enumerate(rel_cols):
     pct_increase = (agg_df[col] - baseline) / baseline * 100
-    ax.bar(
-        x + (i - (len(rel_cols)-1)/2) * width,
-        pct_increase,
-        width,
-        label=col,
-        color=scenario_colors[col],
-        alpha=alpha_val
-    )
+    ax.bar(x + (i - (len(rel_cols)-1)/2) * width,
+           pct_increase,
+           width,
+           label=col,
+           color=scenario_colors[col],
+           alpha=0.8)
 ax.set_xticks(x)
-ax.set_xticklabels(agg_df.index, rotation=tick_rot, ha=tick_ha, fontsize=label_fs)
-ax.set_ylabel('Percentage Increase over Old Baseline (%)', fontsize=label_fs)
-ax.set_title('Relative Percentage Increase by Scenario per Country', fontsize=title_fs)
-ax.legend(loc='upper left', fontsize=legend_fs)
+ax.set_xticklabels(agg_df.index, rotation=45, ha='right', fontsize=11)
+ax.set_ylabel('Percentage Increase over Old Baseline (%)', fontsize=11)
+ax.set_title('Relative Percentage Increase by Scenario per Country', fontsize=14)
+ax.legend(loc='upper left', fontsize=9)
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 plt.tight_layout()
 plt.show()
 
-# 9) Compute summary stats into a list of dicts
+# --- Section 9: Summary Statistics ---
 stats = []
 for name, df in scenario_dfs.items():
-    # ensure NumTurbines
     if "NumTurbines" not in df.columns:
-        if "Number of turbines" in df.columns:
-            df["NumTurbines"] = pd.to_numeric(df["Number of turbines"], errors="coerce").fillna(0)
-        else:
-            df["NumTurbines"] = df_old["NumTurbines"]
-
-    # ensure old rep cap present
+        df["NumTurbines"] = df_old["NumTurbines"]
     if "RepCap_kW" not in df.columns:
         df = df.join(df_old["RepCap_kW"], how="left")
-
-    # total capacity and new capacity in kW
     if "Cap_MW" in df.columns:
         total_cap_MW = df["Cap_MW"].sum()
         new_kW = df["Cap_MW"] * 1e3
@@ -202,16 +162,13 @@ for name, df in scenario_dfs.items():
     else:
         total_cap_MW = 0
         new_kW = pd.Series(0, index=df.index)
-
     n_parks = df.shape[0]
     n_turbs = df["NumTurbines"].sum()
     avg_kW  = (total_cap_MW * 1e3 / n_turbs) if n_turbs > 0 else 0
     pct_rep = (n_turbs / df_old["NumTurbines"].sum() * 100) if df_old["NumTurbines"].sum() > 0 else 0
-
     df["NewRepCap_kW"] = new_kW / df["NumTurbines"].replace(0, np.nan)
     inc = df.loc[df["NewRepCap_kW"] >= df["RepCap_kW"], "NumTurbines"].sum()
     pct_inc = (inc / n_turbs * 100) if n_turbs > 0 else 0
-
     stats.append({
         "Approach": name,
         "TotalCap (MW)": total_cap_MW,
@@ -221,11 +178,8 @@ for name, df in scenario_dfs.items():
         "% Repowered": pct_rep,
         "% ↑ or = Cap": pct_inc
     })
-
-# 10) Build and print a summary table without extra deps
 stats_df = pd.DataFrame(stats).set_index("Approach")
 
-# 11) Add annual energy so the hybrids differ
 energy = []
 for name in stats_df.index:
     df = scenario_dfs[name]
@@ -235,18 +189,12 @@ for name in stats_df.index:
         energy.append(df["TWh_yield"].sum())
     else:
         energy.append(df["TWh"].sum() if "TWh" in df.columns else df["TWh_old"].sum())
+stats_df["TotalEnergy_TWh"] = energy
 
-stats_df["AnnualEnergy (TWh)"] = energy
-
-
-# 12) Print total energy per approach (all countries combined)
 print("\nTotal Annual Energy Production per Approach (All Countries Combined):")
-print(stats_df[["AnnualEnergy (TWh)"]].rename(columns={"AnnualEnergy (TWh)": "TotalEnergy_TWh"}))
+print(stats_df[["TotalEnergy_TWh"]])
 
-
-# --- 10) Demand coverage plot for Approaches 0, 5 & 6
-
-# 10a) Define electricity consumption per country (TWh)
+# --- Section 10–11: Demand Coverage Plot for Approaches 0, 5 & 6 ---
 consumption_data = {
     "Country": [
         "Russia","Germany","France","Italy","UK","Turkey","Spain","Poland","Sweden","Norway",
@@ -264,41 +212,155 @@ consumption_data = {
     ]
 }
 df_cons = pd.DataFrame(consumption_data)
-
-# 10b) Extract total energy per approach from agg_df
 wind_old   = agg_df["Approach 0-Old (Decomm+Repl)"].rename("Wind_Old_TWh")
 wind_cap   = agg_df["Approach 5-No-Loss Hybrid (Cap-based)"].rename("Wind_Cap_TWh")
 wind_yield = agg_df["Approach 6-No-Loss Hybrid (Yield-based)"].rename("Wind_Yield_TWh")
 
-# 10c) Build comparison DataFrame
 df_cmp = (
     df_cons
       .merge(wind_old,   left_on="Country", right_index=True, how="left")
       .merge(wind_cap,   left_on="Country", right_index=True, how="left")
       .merge(wind_yield, left_on="Country", right_index=True, how="left")
 )
-
-# 10d) Compute coverage percentages
 df_cmp["Cov_Old_%"]   = df_cmp["Wind_Old_TWh"]   / df_cmp["Electricity_Consumption_TWh"] * 100
 df_cmp["Cov_Cap_%"]   = df_cmp["Wind_Cap_TWh"]    / df_cmp["Electricity_Consumption_TWh"] * 100
 df_cmp["Cov_Yield_%"] = df_cmp["Wind_Yield_TWh"]  / df_cmp["Electricity_Consumption_TWh"] * 100
 
-# 10e) Sort and plot
 df_plot = df_cmp.sort_values("Cov_Old_%", ascending=False).reset_index(drop=True)
 x = np.arange(len(df_plot))
 w = 0.25
-
 fig, ax = plt.subplots(figsize=(16, 8))
 ax.bar(x - w, df_plot["Cov_Old_%"],   width=w, label="Approach 0 (Old)",          edgecolor='black')
 ax.bar(x,     df_plot["Cov_Cap_%"],   width=w, label="Approach 5 (Cap-based NLH)", edgecolor='black')
 ax.bar(x + w, df_plot["Cov_Yield_%"], width=w, label="Approach 6 (Yield-based NLH)", edgecolor='black')
-
 ax.set_xticks(x)
 ax.set_xticklabels(df_plot["Country"], rotation=45, ha='right', fontsize=10)
 ax.set_ylabel("Demand Coverage (%)", fontsize=14)
 ax.set_title("EU+ Countries: Wind Demand Coverage by Approach 0, 5 & 6", fontsize=18, fontweight='bold')
 ax.yaxis.grid(True, linestyle='--', alpha=0.6)
-ax.legend(loc="upper right", fontsize=12, frameon=False)
-
+ax.legend(loc='upper right', fontsize=12, frameon=False)
 plt.tight_layout()
 plt.show()
+
+# --- Section 12: ΔAnnual Energy vs Single-Turbine Share (A2 & A6) ---
+baseline = agg_df["Approach 0-Old (Decomm+Repl)"]
+y2 = agg_df["Approach 2-Capacity Maximization"]
+y6 = agg_df["Approach 6-No-Loss Hybrid (Yield-based)"]
+delta2 = y2 - baseline
+delta6 = y6 - baseline
+
+total  = df_old.groupby("Country").size()
+single = df_old[df_old["NumTurbines"]==1].groupby("Country").size()
+share  = (single/total*100).reindex(agg_df.index).fillna(0)
+
+order12 = share.sort_values().index.tolist()
+delta2_s = delta2.reindex(order12)
+delta6_s = delta6.reindex(order12)
+share_s  = share.reindex(order12)
+
+x12 = np.arange(len(order12))
+w12 = 0.3
+
+fig, ax1 = plt.subplots(figsize=(14,6))
+ax1.bar(x12 - w12/2, delta2_s, width=w12,
+        label="ΔTWh A2",
+        color=scenario_colors["Approach 2-Capacity Maximization"], alpha=0.8)
+ax1.bar(x12 + w12/2, delta6_s, width=w12,
+        label="ΔTWh A6",
+        color=scenario_colors["Approach 6-No-Loss Hybrid (Yield-based)"], alpha=0.8)
+ax1.set_xticks(x12)
+ax1.set_xticklabels(order12, rotation=45, ha='right')
+ax1.set_ylabel("Δ Annual Energy (TWh)")
+ax1.set_title("Δ Annual Energy vs Single-Turbine Share (A2 & A6)")
+
+ax2 = ax1.twinx()
+ax2.plot(x12, share_s, 'o-', color=COLOR_MARKER, label="Single-Turbine Share (%)")
+ax2.set_ylabel("Single-Turbine Share (%)")
+
+h1, l1 = ax1.get_legend_handles_labels()
+h2, l2 = ax2.get_legend_handles_labels()
+ax1.legend(h1 + h2, l1 + l2, ncol=2, loc="upper left")
+plt.tight_layout()
+plt.show()
+
+# --- Section 13: ΔAnnual Energy vs Avg Turbine Age (A2 & A6) ---
+df_age = df_old.dropna(subset=["Commissioning date"]).copy()
+df_age["Age"] = datetime.date.today().year - pd.to_datetime(df_age["Commissioning date"]).dt.year
+age = df_age.groupby("Country")["Age"].mean().reindex(agg_df.index).fillna(0)
+
+order13 = age.sort_values().index.tolist()
+delta2_s2 = delta2.reindex(order13)
+delta6_s2 = delta6.reindex(order13)
+age_s     = age.reindex(order13)
+
+x13 = np.arange(len(order13))
+
+fig, ax1 = plt.subplots(figsize=(14,6))
+ax1.bar(x13 - w12/2, delta2_s2, width=w12,
+        label="ΔTWh A2",
+        color=scenario_colors["Approach 2-Capacity Maximization"], alpha=0.8)
+ax1.bar(x13 + w12/2, delta6_s2, width=w12,
+        label="ΔTWh A6",
+        color=scenario_colors["Approach 6-No-Loss Hybrid (Yield-based)"], alpha=0.8)
+ax1.set_xticks(x13)
+ax1.set_xticklabels(order13, rotation=45, ha='right')
+ax1.set_ylabel("Δ Annual Energy (TWh)")
+ax1.set_title("Δ Annual Energy vs Avg Turbine Age (A2 & A6)")
+
+ax2 = ax1.twinx()
+ax2.plot(x13, age_s, 'o-', color=COLOR_MARKER, label="Avg Turbine Age (years)")
+ax2.set_ylabel("Avg Turbine Age (years)")
+
+h1, l1 = ax1.get_legend_handles_labels()
+h2, l2 = ax2.get_legend_handles_labels()
+ax1.legend(h1 + h2, l1 + l2, ncol=2, loc="upper left")
+plt.tight_layout()
+plt.show()
+
+# --- Section 14: Energy Density by Scenario (TWh/km²), all approaches sorted by A2 ---
+orig_area_col = detect_col(scenario_dfs["Approach 0-Old (Decomm+Repl)"], "park area")
+try:
+    new_area_col = detect_col(scenario_dfs["Approach 2-Capacity Maximization"], "new park area")
+except KeyError:
+    new_area_col = detect_col(scenario_dfs["Approach 2-Capacity Maximization"], "park area")
+
+ed = pd.DataFrame(index=agg_df.index)
+for i, label in enumerate(plot_cols):
+    if i == 0:
+        area = scenario_dfs[label].groupby("Country")[orig_area_col].sum() / 1e6
+    else:
+        area = scenario_dfs[label].groupby("Country")[new_area_col].sum() / 1e6
+    energy = agg_df[label]
+    ed[f"Density_{i}"] = energy / area.replace(0, np.nan)
+
+ed.sort_values("Density_2", ascending=False, inplace=True)
+
+fig, ax = plt.subplots(figsize=(14,6))
+x = np.arange(len(ed))
+w = 0.12
+for i, label in enumerate(plot_cols):
+    ax.bar(x + (i-3)*w,
+           ed[f"Density_{i}"],
+           width=w,
+           label=label,
+           color=scenario_colors[label],
+           alpha=0.8)
+
+ax.set_xticks(x)
+ax.set_xticklabels(ed.index, rotation=45, ha='right')
+ax.set_ylabel("Energy Density (TWh/km²)")
+ax.set_title("Annual Energy per Land Area by Scenario and Country", fontsize=14)
+ax.legend(ncol=2, fontsize=8)
+plt.tight_layout()
+plt.show()
+
+
+# make a copy and rename columns to the approach names
+density_table = ed.copy()
+density_table.columns = plot_cols
+
+# round to 3 decimal places and print
+print("\n--- Section 15: Energy Density (TWh/km²) by Country & Approach ---")
+print(density_table.round(3).to_string())
+
+

@@ -452,3 +452,31 @@ ax_irr.grid(axis='y', linestyle='--', alpha=0.4)
 
 plt.tight_layout()
 plt.show()
+
+
+# Convert to pandas Series (if still as numpy arrays)
+capex_rep_series = pd.Series(capex_rep)
+capex_dec_series = pd.Series(capex_dec)
+
+def capex_summary(series):
+    data = series.dropna()
+    q1, median, q3 = np.percentile(data, [25, 50, 75])
+    iqr = q3 - q1
+    whisker_low  = max(data.min(),       q1 - 1.5 * iqr)
+    whisker_high = min(data.max(),       q3 + 1.5 * iqr)
+    return {
+        'Mean':         data.mean(),
+        'Median':       median,
+        'Min':          data.min(),
+        'Max':          data.max(),
+        'Whisker Low':  whisker_low,
+        'Whisker High': whisker_high
+    }
+
+# Build and display a summary table
+summary = pd.DataFrame({
+    'Repowering':      capex_summary(capex_rep_series),
+    'Decommissioning': capex_summary(capex_dec_series)
+}).T
+
+print("\nCAPEX Summary Statistics:\n", summary)

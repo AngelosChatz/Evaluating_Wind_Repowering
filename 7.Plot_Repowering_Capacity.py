@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+import datetime
+
 
 # Define base directory and subdirectories
 base_dir = Path(__file__).resolve().parent
@@ -230,5 +232,102 @@ for idx, name in enumerate(approaches):
     ax.grid(True)
 for ax in axs_flat[len(approaches):]:
     fig.delaxes(ax)
+plt.tight_layout()
+plt.show()
+
+
+
+COLOR_MARKER = 'red'
+
+# --- Section 4: ΔCapacity vs Single‐Turbine Share (Approaches 1 & 5), sorted by share ---
+
+# reload cleaned DataFrames for A1 & A5
+df1 = load_and_clean_data(file_approach_1)
+df5 = load_and_clean_data(file_approach_5)
+
+# compute baseline and repowered capacities by country (in GW)
+baseline_country = df_baseline.groupby('Country')['Total Power (MW)'].sum() / 1000
+cap1_country     = df1.groupby('Country')['Repowered Total Capacity (MW)'].sum() / 1000
+cap5_country     = df5.groupby('Country')['Repowered Total Capacity (MW)'].sum() / 1000
+
+# build Δcapacity Series
+delta1 = (cap1_country - baseline_country).fillna(0)
+delta5 = (cap5_country - baseline_country).fillna(0)
+
+# single‐turbine share (same for both)
+df_t = df_baseline.copy()
+df_t["NumTurbines"] = pd.to_numeric(df_t.get("Number of turbines", 0), errors="coerce").fillna(0)
+total_parks  = df_t.groupby("Country").size()
+single_parks = df_t[df_t["NumTurbines"] == 1].groupby("Country").size()
+share = (single_parks / total_parks * 100).reindex(delta1.index).fillna(0)
+
+# sort by share
+order = share.sort_values().index.tolist()
+d1 = delta1.reindex(order)
+d5 = delta5.reindex(order)
+s  = share.reindex(order)
+
+# plot
+x = np.arange(len(order))
+w = 0.3
+
+fig, ax1 = plt.subplots(figsize=(12,6))
+ax1.bar(x - w/2, d1, width=w,
+        label="ΔCapacity A1",
+        color=approach_colors["Approach 1-Power Density"], alpha=0.8)
+ax1.bar(x + w/2, d5, width=w,
+        label="ΔCapacity A5",
+        color=approach_colors["Approach 5-No-Loss Hybrid"], alpha=0.8)
+ax1.set_xticks(x)
+ax1.set_xticklabels(order, rotation=45, ha='right')
+ax1.set_ylabel("Δ Capacity (GW)")
+ax1.set_title("Δ Capacity vs Single‐Turbine Share (A1 & A5)")
+
+ax2 = ax1.twinx()
+ax2.plot(x, s, 'o-', color=COLOR_MARKER, label="Single‐Turbine Share (%)")
+ax2.set_ylabel("Single‐Turbine Share (%)")
+
+h1, l1 = ax1.get_legend_handles_labels()
+h2, l2 = ax2.get_legend_handles_labels()
+ax1.legend(h1+h2, l1+l2, loc="upper left", ncol=2)
+plt.tight_layout()
+plt.show()
+
+
+# --- Section 5: ΔCapacity vs Avg Turbine Age (Approaches 1 & 5), sorted by age ---
+
+# compute avg commissioning‐age
+df_age = df_baseline.copy()
+df_age["Age"] = datetime.date.today().year - df_age["Commissioning date"].dt.year
+age = df_age.groupby("Country")["Age"].mean().reindex(delta1.index).fillna(0)
+
+# sort by age
+order2 = age.sort_values().index.tolist()
+d1_2 = delta1.reindex(order2)
+d5_2 = delta5.reindex(order2)
+a2   = age.reindex(order2)
+
+# plot
+x2 = np.arange(len(order2))
+
+fig, ax1 = plt.subplots(figsize=(12,6))
+ax1.bar(x2 - w/2, d1_2, width=w,
+        label="ΔCapacity A1",
+        color=approach_colors["Approach 1-Power Density"], alpha=0.8)
+ax1.bar(x2 + w/2, d5_2, width=w,
+        label="ΔCapacity A5",
+        color=approach_colors["Approach 5-No-Loss Hybrid"], alpha=0.8)
+ax1.set_xticks(x2)
+ax1.set_xticklabels(order2, rotation=45, ha='right')
+ax1.set_ylabel("Δ Capacity (GW)")
+ax1.set_title("Δ Capacity vs Avg Turbine Age (A1 & A5)")
+
+ax2 = ax1.twinx()
+ax2.plot(x2, a2, 'o-', color=COLOR_MARKER, label="Avg Turbine Age (years)")
+ax2.set_ylabel("Avg Turbine Age (years)")
+
+h1, l1 = ax1.get_legend_handles_labels()
+h2, l2 = ax2.get_legend_handles_labels()
+ax1.legend(h1+h2, l1+l2, loc="upper left", ncol=2)
 plt.tight_layout()
 plt.show()

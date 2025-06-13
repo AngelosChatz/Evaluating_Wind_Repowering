@@ -1,269 +1,342 @@
 import pandas as pd
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from pathlib import Path
+import datetime
 
-# Setup paths
-this_dir = Path(__file__).resolve().parent
-results_dir = this_dir / "results"
-files = {
-    "Approach 1": results_dir / "Approach_1.xlsx",
-    "Approach 2": results_dir / "Approach_2.xlsx",
-    "Approach 3": results_dir / "Approach_3.xlsx",
-    "Approach 4": results_dir / "Approach_4.xlsx",
-    "Approach 5": results_dir / "Approach_5.xlsx",
+# --- Global plotting styles ---
+mpl.rcParams['xtick.color'] = 'black'
+mpl.rcParams['ytick.color'] = 'black'
+mpl.rcParams['axes.labelcolor'] = 'black'
+
+# Color definitions
+COLOR_ORIG   = 'tab:blue'
+COLOR_REP    = 'tab:orange'
+COLOR_INC    = 'tab:green'
+COLOR_MARKER = 'red'
+COLOR_AGE    = 'tab:purple'
+COLOR_HYB    = 'tab:red'  # new scenario color for Approach 6
+APP_COLORS   = {
+    'Original': COLOR_ORIG,
+    'Approach 2': COLOR_REP,
+    'Approach 3': COLOR_AGE,
+    'Approach 4': COLOR_INC,
+    'Approach 5': COLOR_AGE,
+    'Approach 6': COLOR_HYB,
 }
 
-# Helper: safe column conversion
-def to_numeric_col(df, col):
-    df[col] = pd.to_numeric(df.get(col), errors='coerce')
+# --- Helpers ---
+def normalize_cols(df):
+    df.columns = df.columns.str.strip().str.replace('²', '2', regex=False)
     return df
 
-# SECTION 1: REPOWERED POWER DENSITY – Approach 5
-rep5 = pd.read_excel(files['Approach 5']).replace({'#ND': np.nan, '': np.nan})
-rep5 = to_numeric_col(rep5, 'Total_New_Capacity')
-rep5 = to_numeric_col(rep5, 'New_Total_Park_Area (m²)')
-rep5 = rep5[rep5['Total_New_Capacity'] > 0]
+def detect_col(df, keyword):
+    key = keyword.lower()
+    for c in df.columns:
+        norm = c.lower().replace('_', ' ')
+        norm = pd.Series([norm]).str.replace(r"\s*\(.*\)", '', regex=True)[0].strip()
+        if key in norm:
+            return c
+    raise KeyError(f"No column containing '{keyword}'")
 
-g5 = rep5.groupby('Country').agg(
-    Total_New_Capacity=('Total_New_Capacity', 'sum'),
-    New_Area=('New_Total_Park_Area (m²)', 'sum')
-).reset_index()
-g5['Repowered_Power_Density'] = g5['Total_New_Capacity'] / (g5['New_Area'] / 1e6)
-g5 = g5.sort_values('Repowered_Power_Density', ascending=False)
+def load_and_clean(path):
+    df = pd.read_excel(path).replace({'#ND': np.nan, '': np.nan})
+    df = normalize_cols(df)
+    for kw in ["total power", "park area", "total new capacity", "new total park area"]:
+        try:
+            c = detect_col(df, kw)
+            df[c] = pd.to_numeric(df[c], errors='coerce')
+        except KeyError:
+            pass
+    for kw in ["commissioning date", "decommissioning date"]:
+        try:
+            c = detect_col(df, kw)
+            df[c] = pd.to_datetime(df[c], errors='coerce')
+        except KeyError:
+            pass
+    return df
 
-plt.figure(figsize=(12, 8))
-plt.barh(g5['Country'], g5['Repowered_Power_Density'], color=plt.cm.viridis(np.linspace(0, 1, len(g5))))
-plt.title("Repowered Power Density per Country (Approach 5)", fontsize=16, fontweight='bold')
-plt.xlabel("MW/km²", fontsize=14)
-plt.ylabel("Country", fontsize=14)
-plt.gca().invert_yaxis()
-plt.tight_layout()
-plt.show()
+# --- Load data for Approaches 1–6 ---
+base = Path(__file__).resolve().parent / "results"
+filenames = {
+    1: "Approach_1.xlsx",
+    2: "Approach_2.xlsx",
+    3: "Approach_3.xlsx",
+    4: "Approach_4.xlsx",
+    5: "Approach_5.xlsx",
+    6: "Approach_6_No_Loss_Hybrid_Yield_based.xlsx",
+}
+dfs = {i: load_and_clean(base / fname) for i, fname in filenames.items()}
 
-# SECTION 2: ORIGINAL vs. REPOWERED – Approach 5
-orig5 = pd.read_excel(files['Approach 5']).replace({'#ND': np.nan, '': np.nan})
-orig5 = to_numeric_col(orig5, 'Total power')
-orig5 = to_numeric_col(orig5, 'Total Park Area (m²)')
-orig5 = orig5[(orig5['Total power'] > 0) & (orig5['Total Park Area (m²)'] > 0)]
-go5 = orig5.groupby('Country').agg(
-    Total_power=('Total power', 'sum'),
-    Total_area=('Total Park Area (m²)', 'sum')
-).reset_index()
-go5['Original_Power_Density'] = go5['Total_power'] / (go5['Total_area'] / 1e6)
+# Pre-detect key columns from Approach 1
+turb_col    = detect_col(dfs[1], "number of turbines")
+pow_col     = detect_col(dfs[1], "total power")
+area_col    = detect_col(dfs[1], "park area")
+newcap_col  = detect_col(dfs[2], "total new capacity")
+newarea_col = detect_col(dfs[2], "new total park area")
+comm_col    = detect_col(dfs[1], "commissioning date")
+decomm_col  = detect_col(dfs[1], "decommissioning date")
 
-cmp5 = pd.merge(
-    go5[['Country', 'Original_Power_Density']],
-    g5[['Country', 'Repowered_Power_Density']],
-    on='Country', how='outer'
-).fillna(0)
-cmp5 = cmp5.sort_values('Repowered_Power_Density', ascending=False)
-
-plt.figure(figsize=(12, 8))
-y = np.arange(len(cmp5))
-plt.barh(y - 0.2, cmp5['Original_Power_Density'], height=0.4, label='Original')
-plt.barh(y + 0.2, cmp5['Repowered_Power_Density'], height=0.4, label='Repowered')
-plt.yticks(y, cmp5['Country'])
-plt.xlabel("MW/km²", fontsize=14)
-plt.title("Original vs. Approach 5 Power Density per Country", fontsize=16, fontweight='bold')
-plt.legend()
-plt.gca().invert_yaxis()
-plt.tight_layout()
-plt.show()
-
-# SECTION 3: POWER DENSITY COMPARISON – Original & Approaches 1–5
-# compute original density
-def compute_orig_density():
-    df = pd.read_excel(files['Approach 1']).replace({'#ND': np.nan, '': np.nan})
-    df = to_numeric_col(df, 'Total power')
-    df = to_numeric_col(df, 'Total Park Area (m²)')
-    df = df[(df['Total power'] > 0) & (df['Total Park Area (m²)'] > 0)]
-    grp = df.groupby('Country').agg(
-        Total_power=('Total power', 'sum'),
-        Total_area=('Total Park Area (m²)', 'sum')
-    ).reset_index()
-    grp['Orig_Power_Density'] = grp['Total_power'] / (grp['Total_area'] / 1e6)
-    return grp[['Country', 'Orig_Power_Density']]
-
-def compute_rep_density(a):
-    df = pd.read_excel(files[f'Approach {a}']).replace({'#ND': np.nan, '': np.nan})
-    df = to_numeric_col(df, 'Total_New_Capacity')
-    df = to_numeric_col(df, 'New_Total_Park_Area (m²)')
-    df = df[df['Total_New_Capacity'] > 0]
-    grp = df.groupby('Country').agg(
-        Total_New_Capacity=('Total_New_Capacity', 'sum'),
-        New_Area=('New_Total_Park_Area (m²)', 'sum')
-    ).reset_index()
-    grp[f'Rep_Power_Density_{a}'] = grp['Total_New_Capacity'] / (grp['New_Area'] / 1e6)
-    return grp[['Country', f'Rep_Power_Density_{a}']]
-
-orig_dens = compute_orig_density()
-all_dens = orig_dens.copy()
-for a in [1, 2, 3, 4, 5]:
-    rep = compute_rep_density(a)
-    all_dens = all_dens.merge(rep, on='Country', how='outer')
-all_dens.fillna(0, inplace=True)
-all_dens.sort_values('Orig_Power_Density', ascending=False, inplace=True)
-
-plt.figure(figsize=(14, 8))
-idx = np.arange(len(all_dens))
-labels = ['Original'] + [f'Approach {i}' for i in [1, 2, 3, 4, 5]]
-width = 0.12
-for i, label in enumerate(labels):
-    col = 'Orig_Power_Density' if label == 'Original' else f'Rep_Power_Density_{label.split()[-1]}'
-    offset = (i - (len(labels) - 1) / 2) * width
-    plt.bar(idx + offset, all_dens[col], width, label=label)
-plt.xticks(idx, all_dens['Country'], rotation=45, ha='right', fontsize=12)
-plt.xlabel("MW/km²", fontsize=14)
-plt.ylabel("Power Density", fontsize=14)
-plt.title("Power Density per Country: Original vs. Approaches 1–5", fontsize=16, fontweight='bold')
-plt.legend(ncol=3)
-plt.tight_layout()
-plt.show()
-
-# SECTION 4: LAND AREA COMPARISON (Approaches 1–5)
-def compute_country_capacities(file_path):
-    df = pd.read_excel(file_path).replace({'#ND': np.nan, '': np.nan})
-    df['Commissioning date'] = pd.to_datetime(df.get('Commissioning date'), errors='coerce')
-    df['Decommissioning date'] = pd.to_datetime(df.get('Decommissioning date'), errors='coerce')
-    df['Total power'] = pd.to_numeric(df.get('Total power'), errors='coerce')
-    df['Total_New_Capacity'] = pd.to_numeric(df.get('Total_New_Capacity'), errors='coerce')
-    rec = []
-    def add(dic, yr, val): dic[yr] = dic.get(yr, 0) + val
-    for c in df['Country'].dropna().unique():
-        sub = df[df['Country'] == c]
-        bc, rc = {}, {}
-        for _, r in sub.iterrows():
-            if pd.notna(r['Commissioning date']) and pd.notna(r['Total power']):
-                s = r['Commissioning date'].year
-                e = r['Decommissioning date'].year if pd.notna(r['Decommissioning date']) else s + 30
-                add(bc, s, r['Total power']); add(bc, e, -r['Total power'])
-            if pd.notna(r['Commissioning date']) and pd.notna(r['Total_New_Capacity']):
-                s2 = r['Decommissioning date'].year if pd.notna(r['Decommissioning date']) else r['Commissioning date'].year + 20
-                cap2 = r['Total_New_Capacity']; yr = s2
-                while yr <= 2050:
-                    add(rc, yr, cap2); add(rc, yr+20, -cap2); yr += 20
-        h, run = {}, 0.0
-        for y in range(1980, 2023): run += bc.get(y,0); h[y] = run
-        trend = ((h.get(2022,0) - h.get(2000,0)) / 22) if 2000 in h else 0
-        for y in range(2023, 2051): h[y] = h.get(2022,0) + trend * (y - 2022)
-        base2050 = h[2050]
-        run, hr = 0.0, {}
-        for y in range(1980, 2051): run += rc.get(y,0); hr[y] = run
-        rec.append({'Country': c, 'Baseline_2050': base2050, 'Combined_2050': base2050 + hr[2050]})
-    return pd.DataFrame(rec)
-
-def compute_land_area(a):
-    caps = compute_country_capacities(files[f'Approach {a}'])
-    caps['Repowered'] = caps['Combined_2050'] - caps['Baseline_2050']
-    o = pd.read_excel(files[f'Approach {a}']).replace({'#ND': np.nan, '': np.nan})
-    o = to_numeric_col(o, 'Total power')
-    o = to_numeric_col(o, 'Total Park Area (m²)')
-    g = o[(o['Total power'] > 0) & (o['Total Park Area (m²)'] > 0)]
-    g = g.groupby('Country').agg(
-        Total_power=('Total power','sum'),
-        Total_area=('Total Park Area (m²)','sum')
-    ).reset_index()
-    g['Dens'] = g['Total_power'] / (g['Total_area'] / 1e6)
-    m = pd.merge(caps, g[['Country','Dens']], on='Country', how='left')
-    m['Base Area'] = m['Baseline_2050'] / m['Dens']
-    m['Re Area'] = m['Repowered'] / m['Dens']
-    return m[['Country','Base Area','Re Area']]
-
-lds = [compute_land_area(i).rename(columns={'Base Area': f'B{i}', 'Re Area': f'R{i}'}) for i in [1,2,3,4,5]]
-ld = lds[0]
-for df in lds[1:]:
-    ld = ld.merge(df, on='Country', how='outer')
-ld.fillna(0, inplace=True)
-ld['T1'] = ld['B1'] + ld['R1']
-ld.sort_values('T1', ascending=False, inplace=True)
-
-plt.figure(figsize=(14, 8))
-idx = np.arange(len(ld))
-w = 0.15
-for i, a in enumerate([1,2,3,4,5]):
-    off = (i - 2) * w
-    plt.bar(idx + off, ld[f'B{a}'], w, color='lightgray')
-    plt.bar(idx + off, ld[f'R{a}'], w, bottom=ld[f'B{a}'], label=f'Approach {a}')
-plt.xticks(idx, ld['Country'], rotation=45, ha='right')
-plt.xlabel("Country")
-plt.ylabel("Area km²")
-plt.title("Required Land Area Comparison (Approaches 1–5)")
-plt.legend(ncol=3)
-plt.tight_layout()
-plt.show()
-
-
-# SECTION 5: SAVED LAND AREA WITH REPOWERING
-# -----------------------------------------
-# ld already has columns R1 … R5 = km² that would have been needed under original density,
-# but are “saved” because we repower on the existing footprint.
-
-# 1) Sum up the saved km² per approach
-saved_areas = {}
-for a in [1, 2, 3, 4, 5]:
-    saved_areas[f'Approach {a}'] = ld[f'R{a}'].sum()
-
-# 2) Turn into a DataFrame and display
-saved_df = (
-    pd.DataFrame.from_dict(saved_areas, orient='index', columns=['Saved_Area_km2'])
-      .reset_index()
-      .rename(columns={'index': 'Approach'})
+# --- SECTION 3: Power Density – Original vs Approaches 2–6 ---
+df1 = dfs[1]
+base_df = (
+    df1[df1[pow_col] > 0]
+       .groupby("Country")
+       .agg(tp=(pow_col, 'sum'), ta=(area_col, 'sum'))
+       .assign(orig_density=lambda d: d['tp']/(d['ta']/1e6))
 )
-print("Total km² saved by repowering per approach:")
-print(saved_df)
+all_d = base_df[['orig_density']].copy()
+for i in range(2, 7):
+    rep = dfs[i][dfs[i][newcap_col] > 0]
+    tmp = (
+        rep.groupby("Country")
+           .agg(nc=(newcap_col,'sum'), na=(newarea_col,'sum'))
+           .assign(**{f'rep_density_{i}': lambda d: d['nc']/(d['na']/1e6)})
+    )
+    all_d = all_d.join(tmp[f'rep_density_{i}'], how='outer')
+all_d.fillna(0, inplace=True)
+all_d.sort_values('orig_density', ascending=False, inplace=True)
 
-# 3) (Optional) bar‐chart of saved area
-plt.figure(figsize=(8, 5))
-plt.bar(saved_df['Approach'], saved_df['Saved_Area_km2'])
-plt.ylabel("Saved Area (km²)")
-plt.title("Total km² Saved by Repowering (Approaches 1–5)")
-plt.xticks(rotation=45, ha='right')
-plt.tight_layout()
+plt.figure(figsize=(14, 8))
+idx = np.arange(len(all_d))
+labels = ['Original'] + [f'Approach {i}' for i in range(2, 7)]
+w = 0.12
+for j, lbl in enumerate(labels):
+    col = 'orig_density' if j == 0 else f'rep_density_{j+1}'
+    plt.bar(idx + (j-(len(labels)-1)/2)*w, all_d[col], w, color=APP_COLORS[lbl], label=lbl)
+plt.xticks(idx, all_d.index, rotation=45, ha='right')
+plt.title("Power Density: Original vs Approaches 2–6", fontsize=16)
+plt.xlabel("Country"); plt.ylabel("MW/km²"); plt.legend(ncol=3); plt.tight_layout(); plt.show()
+
+# --- SECTION 4: Land Area Comparison (Approaches 1–6) ---
+def compute_country_capacities(df):
+    rec_list, bc, rc = [], {}, {}
+    for _, r in df.iterrows():
+        c = r['Country']
+        if pd.notna(r[comm_col]) and pd.notna(r[pow_col]):
+            start = r[comm_col].year
+            end = r[decomm_col].year if pd.notna(r[decomm_col]) else start + 30
+            bc.setdefault(c, []).extend([(start, r[pow_col]), (end, -r[pow_col])])
+        if pd.notna(r[comm_col]) and pd.notna(r[newcap_col]):
+            start2 = (r[decomm_col].year if pd.notna(r[decomm_col]) else r[comm_col].year + 20)
+            cap2 = r[newcap_col]
+            y = start2
+            while y <= 2050:
+                rc.setdefault(c, []).extend([(y, cap2), (y+20, -cap2)])
+                y += 20
+    records = []
+    for c in set(df['Country']):
+        hist, run = {}, 0
+        for y in range(1980, 2023):
+            for yr, ch in bc.get(c, []):
+                if yr == y: run += ch
+            hist[y] = run
+        trend = ((hist[2022] - hist.get(2000, 0)) / 22) if 2000 in hist else 0
+        for y in range(2023, 2051):
+            hist[y] = hist[2022] + trend * (y - 2022)
+        base2050 = hist[2050]
+        run2 = 0
+        hist2 = {}
+        for y in range(1980, 2051):
+            for yr, ch in rc.get(c, []):
+                if yr == y: run2 += ch
+            hist2[y] = run2
+        records.append({'Country': c, 'Baseline_2050': base2050, 'Combined_2050': base2050 + hist2[2050]})
+    return pd.DataFrame(records)
+
+def compute_land_area(df):
+    caps = compute_country_capacities(df)
+    caps['Repowered'] = caps['Combined_2050'] - caps['Baseline_2050']
+    orig = (
+        df[df[pow_col] > 0]
+          .groupby('Country')
+          .agg(tp=(pow_col,'sum'), ta=(area_col,'sum'))
+          .assign(d=lambda d: d['tp']/(d['ta']/1e6))
+          .reset_index()
+    )
+    merged = caps.merge(orig[['Country','d']], on='Country', how='left')
+    merged['BaseArea'] = merged['Baseline_2050'] / merged['d']
+    merged['ReArea']   = merged['Repowered'] / merged['d']
+    return merged[['Country','BaseArea','ReArea']]
+
+land_tables = [compute_land_area(dfs[i]).rename(columns={'BaseArea': f'B{i}', 'ReArea': f'R{i}'}) for i in range(1,7)]
+ld = land_tables[0]
+for t in land_tables[1:]:
+    ld = ld.merge(t, on='Country', how='outer')
+ld.fillna(0, inplace=True)
+ld['TotalReq'] = ld[[c for c in ld.columns if c.startswith(('B','R'))]].sum(axis=1)
+ld.sort_values('TotalReq', ascending=False, inplace=True)
+
+plt.figure(figsize=(14, 8))
+idx = np.arange(len(ld)); w = 0.15
+for i in range(1, 7):
+    plt.bar(idx + (i-4)*w, ld[f'B{i}'], w, color='lightgray')
+    plt.bar(idx + (i-4)*w, ld[f'R{i}'], w, bottom=ld[f'B{i}'], label=f'Approach {i}')
+plt.xticks(idx, ld['Country'], rotation=45, ha='right')
+plt.title("Required Land Area Comparison (Approaches 1–6)", fontsize=16)
+plt.xlabel("Country"); plt.ylabel("Area km²"); plt.legend(ncol=3); plt.tight_layout(); plt.show()
+
+# --- SECTION 5: Saved Land Area (table) ---
+saved = {i: ld[f'R{i}'].sum() for i in range(1,7)}
+saved_df = pd.Series(saved, name='Saved_km²').rename_axis('Approach').reset_index()
+print("\n--- Section 5: Total km² Saved by Repowering ---")
+print(saved_df.to_string(index=False, float_format="{:.2f}".format))
+
+# --- SECTION 6: Average Density – table ---
+stats = []
+for i, df in dfs.items():
+    p0 = df[pow_col].sum()
+    a0 = df[area_col].sum() / 1e6
+    d0 = p0/a0 if a0 else np.nan
+    if newcap_col in df.columns and newarea_col in df.columns:
+        p1 = df[newcap_col].sum()
+        a1 = df[newarea_col].sum() / 1e6
+        d1 = p1/a1 if a1 else np.nan
+    else:
+        d1 = np.nan
+    stats.append({'Approach': i, 'Baseline_MW/km²': d0, 'Repowered_MW/km²': d1})
+avg_df = pd.DataFrame(stats)
+print("\n--- Section 6: Average Power Density per Approach ---")
+print(avg_df.to_string(index=False, float_format="{:.2f}".format))
+
+# --- common setup for both plots ---
+approaches = [2, 6]
+# compute single‐turbine share & avg age once (they’re the same)
+df_ref = dfs[2]
+total  = df_ref.groupby('Country').size()
+single = df_ref[df_ref[turb_col]==1].groupby('Country').size()
+share  = (single/total*100).fillna(0)
+
+df_ref2 = df_ref.dropna(subset=[comm_col]).copy()
+df_ref2['Age'] = datetime.date.today().year - df_ref2[comm_col].dt.year
+age    = df_ref2.groupby('Country')['Age'].mean().fillna(0)
+
+# colors
+COLOR_2 = 'darkgoldenrod'
+COLOR_6 = 'purple'
+BAR_COLORS = {2: COLOR_2, 6: COLOR_6}
+
+def compute_delta(a, order):
+    df = dfs[a]
+    orig = (df[df[pow_col]>0]
+            .groupby('Country')
+            .agg(tp=(pow_col,'sum'), ta=(area_col,'sum'))
+            .assign(orig_density=lambda d: d['tp']/(d['ta']/1e6)))
+    rep  = (df[df[newcap_col]>0]
+            .groupby('Country')
+            .agg(cap=(newcap_col,'sum'), area=(newarea_col,'sum'))
+            .assign(rep_density=lambda d: d['cap']/(d['area']/1e6)))
+    cmp  = orig[['orig_density']].join(rep['rep_density'], how='outer').fillna(0)
+    delta = (cmp['rep_density'] - cmp['orig_density']).reindex(order)
+    return delta
+
+# --- SECTION 7: ΔDensity vs Single‐Turbine Share ---
+# sort countries by share
+order7 = share.sort_values().index.tolist()
+x7 = np.arange(len(order7))
+width = 0.3
+
+fig, ax1 = plt.subplots(figsize=(12,8))
+for i, a in enumerate(approaches):
+    delta = compute_delta(a, order7)
+    ax1.bar(x7 + (i-0.5)*width,
+            delta,
+            width,
+            color=BAR_COLORS[a],
+            label=f'ΔDensity A{a}')
+
+ax1.set_xticks(x7)
+ax1.set_xticklabels(order7, rotation=45, ha='right')
+ax1.set_xlabel("Country")
+ax1.set_ylabel("Δ Density (MW/km²)")
+ax1.set_title("Approaches 2 & 6: ΔDensity vs Single‐Turbine Share")
+
+ax2 = ax1.twinx()
+share_sorted = share.reindex(order7)
+ax2.plot(x7, share_sorted, 'o-', color=COLOR_MARKER, label='Single‐Turbine Share')
+ax2.set_ylabel("Single‐Turbine Parks (%)")
+
+h1, l1 = ax1.get_legend_handles_labels()
+h2, l2 = ax2.get_legend_handles_labels()
+ax1.legend(h1 + h2, l1 + l2, ncol=2, loc='upper left')
+fig.tight_layout()
 plt.show()
 
 
-# SECTION 6: AVERAGE POWER DENSITY – Baseline vs. Repowered
-# --------------------------------------------------------
-avg_density = []
-for a in [1, 2, 3, 4, 5]:
-    # --- Baseline density (MW/km²) ---
-    df_o = pd.read_excel(files[f'Approach {a}']).replace({'#ND': np.nan, '': np.nan})
-    df_o = to_numeric_col(df_o, 'Total power')
-    df_o = to_numeric_col(df_o, 'Total Park Area (m²)')
-    df_o = df_o[(df_o['Total power'] > 0) & (df_o['Total Park Area (m²)'] > 0)]
-    total_power = df_o['Total power'].sum()                # in MW
-    total_area_km2 = df_o['Total Park Area (m²)'].sum() / 1e6  # in km²
-    baseline_density = total_power / total_area_km2 if total_area_km2 > 0 else np.nan
+# --- SECTION 11: ΔDensity vs Avg Turbine Age ---
+# sort countries by age
+order11 = age.sort_values().index.tolist()
+x11 = np.arange(len(order11))
 
-    # --- Repowered density (MW/km²) ---
-    df_r = pd.read_excel(files[f'Approach {a}']).replace({'#ND': np.nan, '': np.nan})
-    df_r = to_numeric_col(df_r, 'Total_New_Capacity')
-    df_r = to_numeric_col(df_r, 'New_Total_Park_Area (m²)')
-    df_r = df_r[df_r['Total_New_Capacity'] > 0]
-    rep_power = df_r['Total_New_Capacity'].sum()           # in MW
-    rep_area_km2 = df_r['New_Total_Park_Area (m²)'].sum() / 1e6  # in km²
-    repowered_density = rep_power / rep_area_km2 if rep_area_km2 > 0 else np.nan
+fig, ax1 = plt.subplots(figsize=(12,8))
+for i, a in enumerate(approaches):
+    delta = compute_delta(a, order11)
+    ax1.bar(x11 + (i-0.5)*width,
+            delta,
+            width,
+            color=BAR_COLORS[a],
+            label=f'ΔDensity A{a}')
 
-    avg_density.append({
-        'Approach': f'Approach {a}',
-        'Baseline_MW_per_km2': baseline_density,
-        'Repowered_MW_per_km2': repowered_density
+ax1.set_xticks(x11)
+ax1.set_xticklabels(order11, rotation=45, ha='right')
+ax1.set_xlabel("Country")
+ax1.set_ylabel("Δ Density (MW/km²)")
+ax1.set_title("Approaches 2 & 6: ΔDensity vs Avg Turbine Age")
+
+ax2 = ax1.twinx()
+age_sorted = age.reindex(order11)
+ax2.plot(x11, age_sorted, 'o-', color=COLOR_MARKER, label='Avg Turbine Age')
+ax2.set_ylabel("Avg Turbine Age (years)")
+
+h1, l1 = ax1.get_legend_handles_labels()
+h2, l2 = ax2.get_legend_handles_labels()
+ax1.legend(h1 + h2, l1 + l2, ncol=2, loc='upper left')
+fig.tight_layout()
+plt.show()
+
+
+# --- SECTION 8: Average Turbine Age (Approach 5 & 6) ---
+for approach in [5,6]:
+    df = dfs[approach]
+    single = df[df[turb_col]==1].dropna(subset=[comm_col]).copy()
+    single['Age'] = datetime.date.today().year - single[comm_col].dt.year
+    avg_age = single.groupby('Country')['Age'].mean().sort_values(ascending=False)
+    age_df = avg_age.reset_index().rename(columns={'Age':'Avg_Turbine_Age'})
+    print(f"\n--- Section 8: Average Turbine Age per Country (Approach {approach}) ---")
+    print(age_df.to_string(index=False, float_format="{:.1f}".format))
+
+# --- SECTION 10: Total Park Area per Approach (table) ---
+ta = {i: dfs[i][area_col].sum() for i in dfs}
+ta_df = pd.Series(ta, name='Total_Park_Area_m²').rename_axis('Approach').reset_index()
+print("\n--- Section 10: Total Park Area per Approach ---")
+print(ta_df.to_string(index=False, float_format="{:.2f}".format))
+
+
+# --- SECTION 12: Baseline vs. Repowered Park Area per Approach (table) ---
+rows = []
+for i, df in dfs.items():
+    base_area = df[area_col].sum()
+    rep_area = df[newarea_col].sum() if newarea_col in df.columns else np.nan
+    rows.append({
+        "Approach": i,
+        "Baseline_Park_Area (m²)": base_area,
+        "Repowered_New_Area (m²)": rep_area
     })
+area_comparison_df = pd.DataFrame(rows)
+print("\n--- Section 12: Park Area per Approach (Baseline vs Repowered) ---")
+print(area_comparison_df.to_string(index=False, float_format="{:.2f}".format))
 
-avg_density_df = pd.DataFrame(avg_density)
-print("Average power density (MW/km²) per approach:")
-print(avg_density_df)
 
-# Optional: visualize as a grouped bar chart
-plt.figure(figsize=(8, 5))
-x = np.arange(len(avg_density_df))
-width = 0.35
-plt.bar(x - width/2, avg_density_df['Baseline_MW_per_km2'], width, label='Baseline')
-plt.bar(x + width/2, avg_density_df['Repowered_MW_per_km2'], width, label='Repowered')
-plt.xticks(x, avg_density_df['Approach'], rotation=45, ha='right')
-plt.ylabel("Power Density (MW/km²)")
-plt.title("Average Power Density: Baseline vs. Repowered")
-plt.legend()
-plt.tight_layout()
-plt.show()
+# --- Print Power Density Table (Original + Approaches 2–6) ---
+pd.set_option('display.float_format', lambda x: f"{x:.2f}")
+density_table = all_d.rename(columns={
+    'orig_density':   'Original',
+    'rep_density_2':  'Approach 2',
+    'rep_density_3':  'Approach 3',
+    'rep_density_4':  'Approach 4',
+    'rep_density_5':  'Approach 5',
+    'rep_density_6':  'Approach 6',
+})
+print("\nPower density by Country and Approach (MW/km²):\n")
+print(density_table.to_string())
