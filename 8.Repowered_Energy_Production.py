@@ -122,6 +122,7 @@ ax.legend(loc='upper right', fontsize=9)
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 plt.tight_layout()
+plt.savefig("Energy by Scenario per Country.png", dpi=300, bbox_inches="tight")
 plt.show()
 
 # --- Section 8: Relative Percentage Increase over Old Baseline ---
@@ -144,6 +145,7 @@ ax.legend(loc='upper left', fontsize=9)
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 plt.tight_layout()
+plt.savefig("elative Percentage Increase by Scenario per Country.png", dpi=300, bbox_inches="tight")
 plt.show()
 
 # --- Section 9: Summary Statistics ---
@@ -239,6 +241,7 @@ ax.set_title("EU+ Countries: Wind Demand Coverage by Approach 0, 5 & 6", fontsiz
 ax.yaxis.grid(True, linestyle='--', alpha=0.6)
 ax.legend(loc='upper right', fontsize=12, frameon=False)
 plt.tight_layout()
+plt.savefig("Countries: Wind Demand Coverage by Approach.png", dpi=300, bbox_inches="tight")
 plt.show()
 
 # --- Section 12: ΔAnnual Energy vs Single-Turbine Share (A2 & A6) ---
@@ -280,6 +283,7 @@ h1, l1 = ax1.get_legend_handles_labels()
 h2, l2 = ax2.get_legend_handles_labels()
 ax1.legend(h1 + h2, l1 + l2, ncol=2, loc="upper left")
 plt.tight_layout()
+plt.savefig("Annual Energy vs Single-Turbine Share .png", dpi=300, bbox_inches="tight")
 plt.show()
 
 # --- Section 13: ΔAnnual Energy vs Avg Turbine Age (A2 & A6) ---
@@ -314,6 +318,7 @@ h1, l1 = ax1.get_legend_handles_labels()
 h2, l2 = ax2.get_legend_handles_labels()
 ax1.legend(h1 + h2, l1 + l2, ncol=2, loc="upper left")
 plt.tight_layout()
+plt.savefig(" Annual Energy vs Avg Turbine Age .png", dpi=300, bbox_inches="tight")
 plt.show()
 
 # --- Section 14: Energy Density by Scenario (TWh/km²), all approaches sorted by A2 ---
@@ -351,6 +356,7 @@ ax.set_ylabel("Energy Density (TWh/km²)")
 ax.set_title("Annual Energy per Land Area by Scenario and Country", fontsize=14)
 ax.legend(ncol=2, fontsize=8)
 plt.tight_layout()
+plt.savefig("Annual Energy per Land Area by Scenario and Country.png", dpi=300, bbox_inches="tight")
 plt.show()
 
 
@@ -397,4 +403,5 @@ ax2.set_title("Difference in Capacity Factor per Park (Approach 2 − Approach 0
 ax2.grid(True, linestyle='--', alpha=0.5)
 
 plt.tight_layout()
+plt.savefig("Difference in Capacity Factor per Park.png", dpi=300, bbox_inches="tight")
 plt.show()

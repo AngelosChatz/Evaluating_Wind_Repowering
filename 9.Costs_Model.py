@@ -135,7 +135,9 @@ npv_sorted = df.sort_values('NPV_rep', ascending=False)
 plt.bar(npv_sorted.index, npv_sorted['NPV_rep'], color='skyblue')
 plt.title("NPV Across Parks (Repowering)")
 plt.ylabel("NPV (€)"); plt.xlabel("Parks (sorted)")
-plt.grid(axis='y'); plt.tight_layout(); plt.show()
+plt.grid(axis='y'); plt.tight_layout();
+plt.savefig("Difference in Capacity Factor per Park.png", dpi=300, bbox_inches="tight")
+plt.show()
 
 # B) IRR bar
 plt.figure(figsize=(10,6))
@@ -143,7 +145,9 @@ irr_sorted = df.sort_values('IRR_rep', ascending=False)
 plt.bar(irr_sorted.index, irr_sorted['IRR_rep'], color='lightgreen')
 plt.title("IRR Across Parks (Repowering)")
 plt.ylabel("IRR"); plt.xlabel("Parks (sorted)")
-plt.grid(axis='y'); plt.tight_layout(); plt.show()
+plt.grid(axis='y'); plt.tight_layout();
+plt.savefig("IRR.png", dpi=300, bbox_inches="tight")
+plt.show()
 
 
 
@@ -188,6 +192,7 @@ ax.ticklabel_format(style='plain', axis='y')
 ax.yaxis.set_major_formatter(mtick.FuncFormatter(lambda x, p: f"{int(x):,}"))
 
 plt.tight_layout()
+plt.savefig("NPV p.png", dpi=300, bbox_inches="tight")
 plt.show()
 
 
@@ -198,16 +203,10 @@ plt.plot(sens_df['Price'], sens_df['IRR_wgt_Dec'], marker='x', linestyle='--', l
 plt.xlabel('Electricity Price (€/MWh)')
 plt.ylabel('Capacity-Weighted IRR')
 plt.title('Capacity-Weighted IRR vs Electricity Price')
-plt.legend(loc='best'); plt.grid(True); plt.tight_layout(); plt.show()
+plt.legend(loc='best'); plt.grid(True); plt.tight_layout();
+plt.savefig("Capacity-Weighted IRR", dpi=300, bbox_inches="tight")
+plt.show()
 
-# H) % Capacity In-The-Money vs Price
-plt.figure(figsize=(8,5))
-plt.plot(sens_df['Price'], sens_df['%CapPos_Rep'], marker='o', label='% Repowering NPV>0')
-plt.plot(sens_df['Price'], sens_df['%CapPos_Dec'], marker='x', linestyle='--', label='% Decommissioning NPV>0')
-plt.xlabel('Electricity Price (€/MWh)')
-plt.ylabel('% of Capacity')
-plt.title('% Capacity In-the-Money vs Electricity Price')
-plt.legend(); plt.grid(True); plt.tight_layout(); plt.show()
 
 # I) Two sample parks metrics vs price (deterministic selection)
 
@@ -280,6 +279,7 @@ for idx in [park_dec_idx, park_rep_idx]:
     axes[3].grid(True)
 
     plt.tight_layout()
+    plt.savefig("example park results.png", dpi=300, bbox_inches="tight")
     plt.show()
 
 
@@ -313,7 +313,9 @@ plt.plot(sens_df['Price'], sens_df['NPV_per_MW_Rep'], label='Repowering')
 plt.plot(sens_df['Price'], sens_df['NPV_per_MW_Dec'], linestyle='--', label='Decommissioning')
 plt.title("NPV per MW vs Electricity Price")
 plt.xlabel("€/MWh"); plt.ylabel("NPV per MW (€)")
-plt.legend(); plt.grid(True); plt.tight_layout(); plt.show()
+plt.legend(); plt.grid(True); plt.tight_layout();
+plt.savefig("NPV per MW vs Electricity Pric.png", dpi=300, bbox_inches="tight")
+plt.show()
 
 # G) Capacity-Weighted IRR vs Electricity Price
 plt.figure(figsize=(8,5))
@@ -321,15 +323,9 @@ plt.plot(sens_df['Price'], sens_df['IRR_wgt_Rep'], marker='o', label='Repowering
 plt.plot(sens_df['Price'], sens_df['IRR_wgt_Dec'], marker='x', linestyle='--', label='Decommissioning')
 plt.title("Capacity-Weighted IRR vs Electricity Price")
 plt.xlabel("€/MWh"); plt.ylabel("IRR")
-plt.legend(); plt.grid(True); plt.tight_layout(); plt.show()
-
-# H) % Capacity In-the-Money vs Electricity Price
-plt.figure(figsize=(8,5))
-plt.plot(sens_df['Price'], sens_df['%CapPos_Rep'], marker='o', label='% Repowering NPV>0')
-plt.plot(sens_df['Price'], sens_df['%CapPos_Dec'], marker='x', linestyle='--', label='% Decommissioning NPV>0')
-plt.title("% Capacity In-The-Money vs Electricity Price")
-plt.xlabel("€/MWh"); plt.ylabel("% of Capacity")
-plt.legend(); plt.grid(True); plt.tight_layout(); plt.show()
+plt.legend(); plt.grid(True); plt.tight_layout();
+plt.savefig("Capacity-Weighted IRR vs Electricity Price.png", dpi=300, bbox_inches="tight")
+plt.show()
 
 # ─── EXPORT PER-PARK RESULTS TO NEW EXCEL ──────────────────────────────────────
 # Ensure CFs are computed
@@ -400,6 +396,7 @@ ax_capex.legend(handles=leg_handles, title='Scenario', loc='upper left')
 ax_capex.grid(axis='y', linestyle='--', alpha=0.4)
 
 plt.tight_layout()
+plt.savefig("capex.png", dpi=300, bbox_inches="tight")
 plt.show()
 
 
@@ -451,6 +448,7 @@ ax_irr.set_title('IRR: Repowering vs. Decommissioning', fontsize=14)
 ax_irr.grid(axis='y', linestyle='--', alpha=0.4)
 
 plt.tight_layout()
+plt.savefig("irr_tot.png", dpi=300, bbox_inches="tight")
 plt.show()
 
 

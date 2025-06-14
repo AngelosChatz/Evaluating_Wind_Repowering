@@ -171,6 +171,7 @@ plt.legend(loc="upper left", fontsize=9)
 plt.gca().spines['top'].set_visible(False)
 plt.gca().spines['right'].set_visible(False)
 plt.tight_layout()
+plt.savefig("Combined Capacity Scenarios Over Time.png", dpi=300, bbox_inches="tight")
 plt.show()
 
 # 2. Combined Capacity by Country Bar Chart
@@ -201,6 +202,7 @@ plt.ylabel("Capacity (GW)")
 plt.title("Combined Capacity by Country: Baseline (2022) & Repowered (2050)")
 plt.legend(loc="best", fontsize=9)
 plt.tight_layout()
+plt.savefig("Combined Capacity by Country: Baseline (2022) & Repowered (2050).png", dpi=300, bbox_inches="tight")
 plt.show()
 
 # 3. Growth Rate Subplots (3x2)
@@ -218,6 +220,7 @@ for idx, name in enumerate(approaches):
 for ax in axs_flat[len(approaches):]:
     fig.delaxes(ax)
 plt.tight_layout()
+plt.savefig("Growth Rates.png", dpi=300, bbox_inches="tight")
 plt.show()
 
 # Section 4: ΔCapacity vs Single-Turbine Share
@@ -260,6 +263,7 @@ h1, l1 = ax1.get_legend_handles_labels()
 h2, l2 = ax2.get_legend_handles_labels()
 ax1.legend(h1 + h2, l1 + l2, loc="upper left", ncol=2)
 plt.tight_layout()
+plt.savefig("Δ Capacity vs Single‐Turbine Share.png", dpi=300, bbox_inches="tight")
 plt.show()
 
 # Section 5: ΔCapacity vs Avg Turbine Age
@@ -290,4 +294,5 @@ h1, l1 = ax1.get_legend_handles_labels()
 h2, l2 = ax2.get_legend_handles_labels()
 ax1.legend(h1 + h2, l1 + l2, loc="upper left", ncol=2)
 plt.tight_layout()
+plt.savefig("Capacity vs Avg Turbine Age.png", dpi=300, bbox_inches="tight")
 plt.show()

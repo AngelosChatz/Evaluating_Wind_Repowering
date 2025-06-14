@@ -149,6 +149,7 @@ for idx, (approach, df) in enumerate(approach_dfs.items()):
 for ax in axs_flat[len(approach_dfs):]:
     fig.delaxes(ax)
 plt.tight_layout()
+plt.savefig("SU.png", dpi=300, bbox_inches="tight")
 plt.show()
 
 # ----- Bar Plot: Average Repowering Improvement by Approach -----
@@ -172,4 +173,5 @@ ax.set_xlabel("Approach")
 ax.set_ylabel("Mean Improvement (%)")
 ax.grid(axis='y')
 plt.tight_layout()
+plt.savefig("Average Repowering Upgrade Improvement by Approach.png", dpi=300, bbox_inches="tight")
 plt.show()

@@ -330,3 +330,25 @@ plt.savefig("DDensity vs. age .png", dpi=300, bbox_inches="tight")
 plt.show()
 
 
+# --- SECTION 12: Global land‐use summary for Approaches 1–6 ---
+
+# 1. Compute global baseline total (Approach 1)
+baseline_total = (ld['B1'] + ld['R1']).sum()
+
+# 2. Build summary for each approach
+summary = []
+for i in range(1, 7):
+    total_i = (ld[f'B{i}'] + ld[f'R{i}']).sum()
+    diff_i  = total_i - baseline_total
+    pct_i   = (diff_i / baseline_total * 100) if baseline_total else np.nan
+    summary.append({
+        'Approach': APP_LABELS[i],
+        'Total_Land_km²': total_i,
+        'Δ_vs_Baseline_km²': diff_i,
+        '% Expansion vs Baseline': pct_i
+    })
+
+# 3. Create and print the DataFrame
+summary_df = pd.DataFrame(summary)
+print("\n--- Global Land Use Summary by Approach (km²) ---")
+print(summary_df.to_string(index=False, float_format="{:.1f}".format))

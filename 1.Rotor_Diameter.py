@@ -201,6 +201,7 @@ plt.title("Per-Class Log–Log Regression (with Error Metrics)")
 plt.legend(fontsize=12)
 
 plt.tight_layout()
+plt.savefig("Per-Class Log–Log Regression (with Error Metrics).png", dpi=300, bbox_inches="tight")
 plt.show()
 
 # Per-Class Regression on Linear Scale.
@@ -225,6 +226,8 @@ plt.ylabel("Rotor Diameter (m)")
 plt.title("Per-Class Regression on Linear Scale")
 plt.legend(fontsize=12)
 plt.tight_layout()
+plt.savefig("Per-Class Regression on Linear Scale.png", dpi=300, bbox_inches="tight")
+
 plt.show()
 
 # Overall Regression Graphs.
@@ -254,6 +257,7 @@ plt.ylabel("Rotor Diameter (m) [log scale]")
 plt.title("Overall Log–Log Regression")
 plt.legend(fontsize=12)
 plt.tight_layout()
+plt.savefig("PLog–Log Regression.png", dpi=300, bbox_inches="tight")
 plt.show()
 
 # Overall Regression Plot on Linear Scale.
@@ -266,6 +270,7 @@ plt.ylabel("Rotor Diameter (m)")
 plt.title("Overall Regression (Linear Scale)")
 plt.legend(fontsize=12)
 plt.tight_layout()
+plt.savefig("Overall Regression (Linear Scale).png", dpi=300, bbox_inches="tight")
 plt.show()
 
 # Histograms with Improved Aesthetics.
@@ -280,6 +285,7 @@ plt.xlabel("Predicted Rotor Diameter (m)")
 plt.ylabel("Frequency")
 plt.title("Distribution of Predicted Rotor Diameters (Overall Regression)")
 plt.tight_layout()
+plt.savefig("Distribution of Predicted Rotor Diameters .png", dpi=300, bbox_inches="tight")
 plt.show()
 
 # Histogram of Overall Rotor Diameters (Known Values).
@@ -289,6 +295,7 @@ plt.xlabel("Rotor Diameter (m)")
 plt.ylabel("Frequency")
 plt.title("Overall Distribution of Rotor Diameters")
 plt.tight_layout()
+plt.savefig("Overall Distribution of Rotor Diameters.png", dpi=300, bbox_inches="tight")
 plt.show()
 
 # Fill Missing Rotor Diameters Using Class-Specific Regression.
@@ -312,6 +319,7 @@ if predicted_class:
     plt.ylabel("Frequency")
     plt.title("Distribution of Predicted Rotor Diameters (Class-Specific)")
     plt.tight_layout()
+    plt.savefig("Distribution of Predicted Rotor Diameters.png", dpi=300, bbox_inches="tight")
     plt.show()
 
 plt.figure(figsize=(8, 6))
@@ -320,6 +328,7 @@ plt.xlabel("Rotor Diameter (m)")
 plt.ylabel("Frequency")
 plt.title("Overall Distribution of Rotor Diameters (After Filling)")
 plt.tight_layout()
+plt.savefig("Overall Distribution of Rotor Diameters .png", dpi=300, bbox_inches="tight")
 plt.show()
 
 # Save the final data to the output Excel file using the relative results directory.
