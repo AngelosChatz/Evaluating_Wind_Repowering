@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import datetime
 
-
 # Define base directory and subdirectories
 base_dir = Path(__file__).resolve().parent
 results_dir = base_dir / "results"
@@ -16,21 +15,18 @@ file_approach_3 = results_dir / "Approach_3.xlsx"
 file_approach_4 = results_dir / "Approach_4.xlsx"
 file_approach_5 = results_dir / "Approach_5.xlsx"
 
+# Ensure naming consistency
 approaches = {
     "Approach 1-Power Density": file_approach_1,
     "Approach 2-Capacity Maximization": file_approach_2,
     "Approach 3-Rounding Up": file_approach_3,
-    "Approach 4-Single TUrbine Flex": file_approach_4,
+    "Approach 4-Single Turbine Flex": file_approach_4,
     "Approach 5-No-Loss Hybrid": file_approach_5,
 }
 
 years = pd.date_range(start='2000', end='2050', freq='YE')
 
 def load_and_clean_data(file_path, rename_total_power=True):
-    """
-    Reads an Excel file, renames columns if needed, filters out invalid rows,
-    normalizes dates, and fills missing decommissioning dates.
-    """
     df = pd.read_excel(file_path)
     rename_dict = {}
     if rename_total_power and 'Total power' in df.columns:
@@ -39,14 +35,12 @@ def load_and_clean_data(file_path, rename_total_power=True):
         rename_dict['Total_New_Capacity'] = 'Repowered Total Capacity (MW)'
     df = df.rename(columns=rename_dict)
 
-    # Filter out invalid entries
     if 'Total Power (MW)' in df.columns:
         df = df[df['Total Power (MW)'].notna()]
         df = df[df['Total Power (MW)'] != '#ND']
     df = df[df['Commissioning date'].notna()]
     df = df[df['Commissioning date'] != '#ND']
 
-    # Normalize date columns
     def normalize_date(date):
         try:
             if '/' in str(date):
@@ -64,7 +58,6 @@ def load_and_clean_data(file_path, rename_total_power=True):
         df['Commissioning date'] + pd.DateOffset(years=20)
     )
 
-    # Handle repowered capacity
     if 'Repowered Total Capacity (MW)' in df.columns:
         df['Repowered Total Capacity (MW)'] = pd.to_numeric(
             df['Repowered Total Capacity (MW)'], errors='coerce').fillna(0)
@@ -75,7 +68,6 @@ def load_and_clean_data(file_path, rename_total_power=True):
 
     return df
 
-
 def calculate_no_replacement_capacity(df):
     capacity = pd.DataFrame({'Year': years.year}).set_index('Year')
     capacity['Operating Capacity'] = 0.0
@@ -84,7 +76,6 @@ def calculate_no_replacement_capacity(df):
                        (df['Decommissioning date'].dt.year >= year)]
         capacity.loc[year, 'Operating Capacity'] = operating['Total Power (MW)'].sum()
     return capacity['Operating Capacity'] / 1000  # GW
-
 
 def calculate_replacement_same_capacity(df):
     capacity = pd.DataFrame({'Year': years.year}).set_index('Year')
@@ -103,7 +94,6 @@ def calculate_replacement_same_capacity(df):
                 )
         capacity.loc[year, 'Operating Capacity'] = operating['Total Power (MW)'].sum() + replacement
     return capacity['Operating Capacity'] / 1000  # GW
-
 
 def calculate_capacity(df, start_repowering_year, repowered_lifetime=50):
     capacity = pd.DataFrame({'Year': years.year}).set_index('Year')
@@ -128,7 +118,6 @@ def calculate_capacity(df, start_repowering_year, repowered_lifetime=50):
         capacity.loc[year, 'Operating Capacity'] = net_capacity + repowering_net
     return capacity['Operating Capacity'] / 1000  # GW
 
-
 def calculate_growth_rates(df, col, year_range):
     growth = [np.nan]
     cap_list = []
@@ -152,13 +141,14 @@ decom_growth_dict = {}
 repower_growth_dict = {}
 year_range = np.arange(2022, 2043)
 
-# Consistent color mapping for approaches
 approach_colors = {
+    "Approach 0-Old (Decomm+Repl)": "black",
     "Approach 1-Power Density": "blue",
     "Approach 2-Capacity Maximization": "orange",
     "Approach 3-Rounding Up": "green",
-    "Approach 4-Single TUrbine Flex": "red",
-    "Approach 5-No-Loss Hybrid": "brown"
+    "Approach 4-Single Turbine Flex": "red",
+    "Approach 5-No-Loss Hybrid": "brown",
+    "Approach 6-No-Loss Hybrid (Yield-based)": "purple"
 }
 
 for name, path in approaches.items():
@@ -169,12 +159,12 @@ for name, path in approaches.items():
 
 # 1. Combined Line Plot
 plt.figure(figsize=(12, 6))
-plt.plot(years.year, baseline_capacity, label="No Replacement (Baseline)", color="black", linewidth=2)
+plt.plot(years.year, baseline_capacity, label="Approach 0-Old (Decomm+Repl)", color=approach_colors["Approach 0-Old (Decomm+Repl)"], linewidth=2)
 plt.plot(years.year, replacement_capacity, label="Replacement with Same Capacity", linestyle='--', color="gray", linewidth=2)
 for name in approaches:
     plt.plot(years.year, repowering_capacity_dict[name], label=name, linestyle='-.', color=approach_colors[name], linewidth=2)
 plt.axvline(x=2022, color='gray', linestyle='--', linewidth=1, label='Modeling Starts (2022)')
-plt.title("Combined Capacity Scenarios Over Time (2000-2050)")
+plt.title("Combined Capacity Scenarios Over Time (2000–2050)")
 plt.xlabel("Year")
 plt.ylabel("Operating Capacity (GW)")
 plt.legend(loc="upper left", fontsize=9)
@@ -184,18 +174,15 @@ plt.tight_layout()
 plt.show()
 
 # 2. Combined Capacity by Country Bar Chart
-if 'Country' in df_baseline.columns:
-    baseline_by_country = (df_baseline.groupby('Country')['Total Power (MW)'].sum() / 1000).rename("Baseline (2022)")
-else:
-    raise ValueError("Column 'Country' not found in baseline data.")
+baseline_by_country = (df_baseline.groupby('Country')['Total Power (MW)'].sum() / 1000).rename("Approach 0-Old (Decomm+Repl)")
+
 repowered_country_dict = {}
 for name, path in approaches.items():
     df = load_and_clean_data(path)
-    if 'Country' in df.columns:
-        repowered_country_dict[name] = (df.groupby('Country')['Repowered Total Capacity (MW)'].sum() / 1000).rename(f"{name} (2050)")
+    repowered_country_dict[name] = (df.groupby('Country')['Repowered Total Capacity (MW)'].sum() / 1000).rename(f"{name} (2050)")
 
 df_bar = pd.concat([baseline_by_country] + list(repowered_country_dict.values()), axis=1).fillna(0)
-df_bar = df_bar.sort_values("Baseline (2022)", ascending=False)
+df_bar = df_bar.sort_values("Approach 0-Old (Decomm+Repl)", ascending=False)
 countries = df_bar.index.tolist()
 n_bars = df_bar.shape[1]
 x = np.arange(len(countries))
@@ -203,10 +190,8 @@ bar_width = 0.8 / n_bars
 plt.figure(figsize=(14, 6))
 for i, col in enumerate(df_bar.columns):
     offset = (i - n_bars/2) * bar_width + bar_width/2
-    if col == "Baseline (2022)":
+    if col == "Approach 0-Old (Decomm+Repl)":
         color = "black"
-    elif col == "Replacement with Same Capacity (2050)":
-        color = "gray"
     else:
         approach_name = col.replace(" (2050)", "")
         color = approach_colors.get(approach_name, "gray")
@@ -218,14 +203,14 @@ plt.legend(loc="best", fontsize=9)
 plt.tight_layout()
 plt.show()
 
-# 3. Growth Rate Subplots (3x2) to include all approaches
+# 3. Growth Rate Subplots (3x2)
 fig, axs = plt.subplots(3, 2, figsize=(14, 12))
 axs_flat = axs.flatten()
 for idx, name in enumerate(approaches):
     ax = axs_flat[idx]
     ax.plot(year_range, decom_growth_dict[name], label="Decommissioning Growth", marker="o", linewidth=2, color=approach_colors[name])
     ax.plot(year_range, repower_growth_dict[name], label="Repowering Growth", marker="s", linestyle='--', linewidth=2, color=approach_colors[name])
-    ax.set_title(f"{name} Growth Rates (2022-2042)")
+    ax.set_title(f"{name} Growth Rates (2022–2042)")
     ax.set_xlabel("Year")
     ax.set_ylabel("Growth Rate (%)")
     ax.legend(fontsize=9)
@@ -235,99 +220,74 @@ for ax in axs_flat[len(approaches):]:
 plt.tight_layout()
 plt.show()
 
-
-
-COLOR_MARKER = 'red'
-
-# --- Section 4: ΔCapacity vs Single‐Turbine Share (Approaches 1 & 5), sorted by share ---
-
-# reload cleaned DataFrames for A1 & A5
+# Section 4: ΔCapacity vs Single-Turbine Share
 df1 = load_and_clean_data(file_approach_1)
 df5 = load_and_clean_data(file_approach_5)
 
-# compute baseline and repowered capacities by country (in GW)
 baseline_country = df_baseline.groupby('Country')['Total Power (MW)'].sum() / 1000
-cap1_country     = df1.groupby('Country')['Repowered Total Capacity (MW)'].sum() / 1000
-cap5_country     = df5.groupby('Country')['Repowered Total Capacity (MW)'].sum() / 1000
-
-# build Δcapacity Series
+cap1_country = df1.groupby('Country')['Repowered Total Capacity (MW)'].sum() / 1000
+cap5_country = df5.groupby('Country')['Repowered Total Capacity (MW)'].sum() / 1000
 delta1 = (cap1_country - baseline_country).fillna(0)
 delta5 = (cap5_country - baseline_country).fillna(0)
 
-# single‐turbine share (same for both)
 df_t = df_baseline.copy()
 df_t["NumTurbines"] = pd.to_numeric(df_t.get("Number of turbines", 0), errors="coerce").fillna(0)
-total_parks  = df_t.groupby("Country").size()
+total_parks = df_t.groupby("Country").size()
 single_parks = df_t[df_t["NumTurbines"] == 1].groupby("Country").size()
 share = (single_parks / total_parks * 100).reindex(delta1.index).fillna(0)
 
-# sort by share
 order = share.sort_values().index.tolist()
 d1 = delta1.reindex(order)
 d5 = delta5.reindex(order)
-s  = share.reindex(order)
+s = share.reindex(order)
 
-# plot
 x = np.arange(len(order))
 w = 0.3
 
 fig, ax1 = plt.subplots(figsize=(12,6))
-ax1.bar(x - w/2, d1, width=w,
-        label="ΔCapacity A1",
-        color=approach_colors["Approach 1-Power Density"], alpha=0.8)
-ax1.bar(x + w/2, d5, width=w,
-        label="ΔCapacity A5",
-        color=approach_colors["Approach 5-No-Loss Hybrid"], alpha=0.8)
+ax1.bar(x - w/2, d1, width=w, label="ΔCapacity A1", color=approach_colors["Approach 1-Power Density"], alpha=0.8)
+ax1.bar(x + w/2, d5, width=w, label="ΔCapacity A5", color=approach_colors["Approach 5-No-Loss Hybrid"], alpha=0.8)
 ax1.set_xticks(x)
 ax1.set_xticklabels(order, rotation=45, ha='right')
 ax1.set_ylabel("Δ Capacity (GW)")
 ax1.set_title("Δ Capacity vs Single‐Turbine Share (A1 & A5)")
 
 ax2 = ax1.twinx()
-ax2.plot(x, s, 'o-', color=COLOR_MARKER, label="Single‐Turbine Share (%)")
+ax2.plot(x, s, 'o-', color='red', label="Single‐Turbine Share (%)")
 ax2.set_ylabel("Single‐Turbine Share (%)")
 
 h1, l1 = ax1.get_legend_handles_labels()
 h2, l2 = ax2.get_legend_handles_labels()
-ax1.legend(h1+h2, l1+l2, loc="upper left", ncol=2)
+ax1.legend(h1 + h2, l1 + l2, loc="upper left", ncol=2)
 plt.tight_layout()
 plt.show()
 
-
-# --- Section 5: ΔCapacity vs Avg Turbine Age (Approaches 1 & 5), sorted by age ---
-
-# compute avg commissioning‐age
+# Section 5: ΔCapacity vs Avg Turbine Age
 df_age = df_baseline.copy()
 df_age["Age"] = datetime.date.today().year - df_age["Commissioning date"].dt.year
 age = df_age.groupby("Country")["Age"].mean().reindex(delta1.index).fillna(0)
 
-# sort by age
 order2 = age.sort_values().index.tolist()
 d1_2 = delta1.reindex(order2)
 d5_2 = delta5.reindex(order2)
-a2   = age.reindex(order2)
+a2 = age.reindex(order2)
 
-# plot
 x2 = np.arange(len(order2))
 
 fig, ax1 = plt.subplots(figsize=(12,6))
-ax1.bar(x2 - w/2, d1_2, width=w,
-        label="ΔCapacity A1",
-        color=approach_colors["Approach 1-Power Density"], alpha=0.8)
-ax1.bar(x2 + w/2, d5_2, width=w,
-        label="ΔCapacity A5",
-        color=approach_colors["Approach 5-No-Loss Hybrid"], alpha=0.8)
+ax1.bar(x2 - w/2, d1_2, width=w, label="ΔCapacity A1", color=approach_colors["Approach 1-Power Density"], alpha=0.8)
+ax1.bar(x2 + w/2, d5_2, width=w, label="ΔCapacity A5", color=approach_colors["Approach 5-No-Loss Hybrid"], alpha=0.8)
 ax1.set_xticks(x2)
 ax1.set_xticklabels(order2, rotation=45, ha='right')
 ax1.set_ylabel("Δ Capacity (GW)")
 ax1.set_title("Δ Capacity vs Avg Turbine Age (A1 & A5)")
 
 ax2 = ax1.twinx()
-ax2.plot(x2, a2, 'o-', color=COLOR_MARKER, label="Avg Turbine Age (years)")
+ax2.plot(x2, a2, 'o-', color='red', label="Avg Turbine Age (years)")
 ax2.set_ylabel("Avg Turbine Age (years)")
 
 h1, l1 = ax1.get_legend_handles_labels()
 h2, l2 = ax2.get_legend_handles_labels()
-ax1.legend(h1+h2, l1+l2, loc="upper left", ncol=2)
+ax1.legend(h1 + h2, l1 + l2, loc="upper left", ncol=2)
 plt.tight_layout()
 plt.show()

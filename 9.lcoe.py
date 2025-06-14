@@ -10,7 +10,7 @@ import matplotlib.patches as mpatches
 BASE_DIR    = Path(__file__).resolve().parent
 RESULTS_DIR = BASE_DIR / "results"
 FILE_NEW    = RESULTS_DIR / "Approach_2_Cf.xlsx"
-FILE_OLD    = RESULTS_DIR / "Cf_old_updated.xlsx"
+FILE_OLD    = RESULTS_DIR / "CF_old_updated.xlsx"
 
 # ─── READ & RENAME NEW ────────────────────────────────────────────────────────
 df_new = pd.read_excel(FILE_NEW).reset_index(drop=True)
@@ -169,13 +169,13 @@ tick_pos = [i*2+1 + 0.35/2 for i in range(len(learning_scenarios))]
 plt.xticks(tick_pos, learning_scenarios.keys(), rotation=15, ha='right')
 plt.ylabel('LCOE (€/MWh)')
 plt.legend([mpatches.Patch(color='skyblue'), mpatches.Patch(color='orange')],
-           ['Repowering','Decommissioning'], title='Strategy')
+           ['Approach 2-Capacity Maximization', 'Approach 0-Old (Decomm+Repl)'], title='Strategy')
 plt.grid(axis='y', linestyle='--', alpha=0.5)
 plt.tight_layout()
+plt.savefig("BOXPLOT OF ALL SCENARIOS .png", dpi=300, bbox_inches="tight")
 plt.show()
 
 # ─── PLOT 2: AVG LCOE vs SCENARIO ────────────────────────────────────────────
-# only numeric columns, to avoid the object‐dtype error:
 avg_stats = (
     lcoe_df
     .groupby('Scenario')[['Repowering','Decommissioning']]
@@ -183,13 +183,14 @@ avg_stats = (
     .reset_index()
 )
 plt.figure(figsize=(8,5))
-plt.plot(avg_stats['Scenario'], avg_stats['Repowering'],    marker='o', label='Repowering')
-plt.plot(avg_stats['Scenario'], avg_stats['Decommissioning'],marker='s', linestyle='--', label='Decommissioning')
+plt.plot(avg_stats['Scenario'], avg_stats['Repowering'], marker='o', label='Approach 2-Capacity Maximization')
+plt.plot(avg_stats['Scenario'], avg_stats['Decommissioning'], marker='s', linestyle='--', label='Approach 0-Old (Decomm+Repl)')
 plt.xticks(rotation=15)
 plt.ylabel('Avg LCOE (€/MWh)')
 plt.legend()
 plt.grid(True, linestyle='--', alpha=0.5)
 plt.tight_layout()
+plt.savefig("AVG LCOE vs SCENARIO.png", dpi=300, bbox_inches="tight")
 plt.show()
 
 # ─── PLOT 3: COUNTRY COMPARISON (Moderate, 14%) ─────────────────────────────
@@ -198,6 +199,7 @@ mod = df.copy()
 mod['Repowering']      = mod.apply(lambda r: calc_lcoe(r['energy_mwh'],     r['capacity_kw'],     BASE_CAPEX_PER_KW*(1-mod_rate)), axis=1)
 mod['Decommissioning'] = mod.apply(lambda r: calc_lcoe(r['energy_mwh_old'], r['capacity_kw_old'], DECOM_COST_PER_KW*(1-mod_rate)), axis=1)
 mod['No_Loss_Hybrid']  = np.where(mod['energy_mwh']>=mod['energy_mwh_old'], mod['Repowering'], mod['Decommissioning'])
+
 cs_hybrid = (
     mod.groupby('country')[['Repowering','Decommissioning','No_Loss_Hybrid']]
        .mean()
@@ -205,69 +207,62 @@ cs_hybrid = (
        .reset_index()
        .sort_values('Repowering', ascending=False)
 )
+
 plt.figure(figsize=(14,6))
 x = np.arange(len(cs_hybrid)); w = 0.25
-plt.bar(x-w, cs_hybrid['Repowering'],      w, label='Repowering',      color='skyblue')
-plt.bar(x,   cs_hybrid['Decommissioning'], w, label='Decommissioning', color='orange')
-plt.bar(x+w, cs_hybrid['No_Loss_Hybrid'],  w, label='No-Loss Hybrid',  color='seagreen')
+plt.bar(x - w, cs_hybrid['Decommissioning'], w,
+        label='Approach 0-Old (Decomm+Repl)', color='black')
+plt.bar(x,     cs_hybrid['Repowering'],      w,
+        label='Approach 2-Capacity Maximization', color='orange')
+plt.bar(x + w, cs_hybrid['No_Loss_Hybrid'],  w,
+        label='Approach 6-No-Loss Hybrid (Yield-based)', color='purple')
+
 plt.xticks(x, cs_hybrid['country'], rotation=45, ha='right')
 plt.ylabel('Avg LCOE (€/MWh)')
+plt.title('LCOE by Country – Moderate 14% Learning Scenario')
 plt.legend(title='Strategy')
 plt.grid(axis='y', linestyle='--', alpha=0.5)
 plt.tight_layout()
+plt.savefig("LCOE by Country – Moderate 14% Learning Scenario.png", dpi=300, bbox_inches="tight")
 plt.show()
+
 
 # ─── PLOT 4: % DIFFERENCE vs Decommissioning (14%) ───────────────────────────
 cs_hybrid['Rep_%_of_Dec'] = (cs_hybrid['Repowering'] - cs_hybrid['Decommissioning']) \
                             / cs_hybrid['Decommissioning'] * 100
 cs_hybrid['NLH_%_of_Dec'] = (cs_hybrid['No_Loss_Hybrid'] - cs_hybrid['Decommissioning']) \
                             / cs_hybrid['Decommissioning'] * 100
+
 plt.figure(figsize=(14,5))
 x = np.arange(len(cs_hybrid)); w = 0.35
-plt.bar(x-w/2, cs_hybrid['Rep_%_of_Dec'], width=w, color='skyblue', label='Repowering % of Dec')
-plt.bar(x+w/2, cs_hybrid['NLH_%_of_Dec'], width=w, color='seagreen', label='No-Loss Hybrid % of Dec')
-plt.axhline(0, color='black', linewidth=0.8)
+
+plt.bar(x - w/2, cs_hybrid['Rep_%_of_Dec'], width=w,
+        color='orange', label='Approach 2-Capacity Maximization')
+plt.bar(x + w/2, cs_hybrid['NLH_%_of_Dec'], width=w,
+        color='purple', label='Approach 6-No-Loss Hybrid (Yield-based)')
+
+plt.axhline(0, color='black', linewidth=1.0)
 plt.xticks(x, cs_hybrid['country'], rotation=45, ha='right')
 plt.ylabel('% Difference vs Decommissioning')
-plt.title('Repowering vs No-Loss Hybrid LCOE (Moderate 14%)')
+plt.title('Relative LCOE Difference vs Approach 0 – Moderate 14% Scenario')
 plt.legend()
 plt.grid(axis='y', linestyle='--', alpha=0.5)
 plt.tight_layout()
+plt.savefig("Relative LCOE Difference vs Approach 0 – Moderate 14% Scenario.png", dpi=300, bbox_inches="tight")
 plt.show()
-
-# ─── CAPACITY FACTOR COMPARISON ───────────────────────────────────────────────
-cf_new = df['energy_mwh']     / (df['capacity_kw']/1000 * 8760)
-cf_old = df['energy_mwh_old'] / (df['capacity_kw_old']/1000 * 8760)
-num_higher_cf = (cf_new > cf_old).sum()
-total_parks   = len(df)
-print(f"\nOut of {total_parks} parks, {num_higher_cf} have a higher capacity factor after repowering.")
-
-# ─── SUMMARY TABLE FOR 14% SCENARIO ──────────────────────────────────────────
-mod14 = lcoe_df[lcoe_df['Scenario']=='Moderate (14%)']
-country_mod14 = (
-    mod14.groupby('country')[['Repowering','Decommissioning','No_Loss_Hybrid']]
-         .mean().round(1)
-         .rename_axis(index='Country')
-)
-print("\nAverage LCOE by Country (Moderate, 14% learning) €/MWh:\n")
-print(country_mod14.to_string())
-
-# ─── ENERGY YIELD COMPARISON ─────────────────────────────────────────────────
-num_higher_yield = (df['energy_mwh'] > df['energy_mwh_old']).sum()
-yield_pct        = num_higher_yield/total_parks * 100
-print(f"\nOut of {total_parks} parks, {num_higher_yield} ({yield_pct:.1f}%) have a higher annual energy yield after repowering.")
 
 # ─── PLOT 5: LCOE vs ENERGY YIELD (Baseline) ─────────────────────────────────
 df_sorted = df.sort_values('energy_mwh').copy()
 plt.figure(figsize=(10,6))
 plt.plot(df_sorted['energy_mwh'], df_sorted['LCOE_Repowering_baseline'],
-         linestyle='-',  linewidth=2, label='Repowering (Baseline)')
+         linestyle='-',  linewidth=2, label='Approach 2-Capacity Maximization')
 plt.plot(df_sorted['energy_mwh'], df_sorted['LCOE_Decommissioning_baseline'],
-         linestyle='--', linewidth=2, label='Decommissioning (Baseline)')
+         linestyle='--', linewidth=2, label='Approach 0-Old (Decomm+Repl)')
 plt.xlabel('Annual Energy Generation (MWh)')
 plt.ylabel('LCOE (€/MWh)')
-plt.title('LCOE vs. Energy Yield (Parks Sorted by Yield, Baseline)')
+plt.title('LCOE vs. Energy Yield (Sorted by Yield, Baseline)')
 plt.legend()
 plt.grid(axis='both', linestyle='--', alpha=0.5)
 plt.tight_layout()
+plt.savefig("LCOE vs. Energy Yield (Sorted by Yield, Baseline).png", dpi=300, bbox_inches="tight")
 plt.show()

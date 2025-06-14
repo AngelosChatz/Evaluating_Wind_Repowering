@@ -193,7 +193,6 @@ stats_df["TotalEnergy_TWh"] = energy
 
 print("\nTotal Annual Energy Production per Approach (All Countries Combined):")
 print(stats_df[["TotalEnergy_TWh"]])
-
 # --- Section 10–11: Demand Coverage Plot for Approaches 0, 5 & 6 ---
 consumption_data = {
     "Country": [
@@ -230,9 +229,9 @@ df_plot = df_cmp.sort_values("Cov_Old_%", ascending=False).reset_index(drop=True
 x = np.arange(len(df_plot))
 w = 0.25
 fig, ax = plt.subplots(figsize=(16, 8))
-ax.bar(x - w, df_plot["Cov_Old_%"],   width=w, label="Approach 0 (Old)",          edgecolor='black')
-ax.bar(x,     df_plot["Cov_Cap_%"],   width=w, label="Approach 5 (Cap-based NLH)", edgecolor='black')
-ax.bar(x + w, df_plot["Cov_Yield_%"], width=w, label="Approach 6 (Yield-based NLH)", edgecolor='black')
+ax.bar(x - w, df_plot["Cov_Old_%"],   width=w, label="Approach 0 (Old)",          color="black", edgecolor='black')
+ax.bar(x,     df_plot["Cov_Cap_%"],   width=w, label="Approach 5 (Cap-based NLH)", color="#a0522d", edgecolor='black')
+ax.bar(x + w, df_plot["Cov_Yield_%"], width=w, label="Approach 6 (Yield-based NLH)", color="#800080", edgecolor='black')
 ax.set_xticks(x)
 ax.set_xticklabels(df_plot["Country"], rotation=45, ha='right', fontsize=10)
 ax.set_ylabel("Demand Coverage (%)", fontsize=14)
@@ -364,3 +363,38 @@ print("\n--- Section 15: Energy Density (TWh/km²) by Country & Approach ---")
 print(density_table.round(3).to_string())
 
 
+# --- Section 16+17: Combined Capacity Factor Distribution and Difference Plot ---
+
+# Extract and sort CF values
+cf_vals_old = scenario_dfs["Approach 0-Old (Decomm+Repl)"]["CF_pct"].dropna().sort_values(ascending=False).reset_index(drop=True)
+cf_vals_a2  = scenario_dfs["Approach 2-Capacity Maximization"]["CF"].dropna().sort_values(ascending=False).reset_index(drop=True)
+
+# Get matched CF data
+df_old_cf = scenario_dfs["Approach 0-Old (Decomm+Repl)"][["CF_pct"]].copy()
+df_a2_cf  = scenario_dfs["Approach 2-Capacity Maximization"][["CF"]].copy()
+cf_diff = df_old_cf.join(df_a2_cf, how="inner").dropna()
+cf_diff = cf_diff[cf_diff["CF"] > 0]
+cf_diff["ΔCF_pct_points"] = (cf_diff["CF"] - cf_diff["CF_pct"]) * 100
+cf_diff_sorted = cf_diff.sort_values("ΔCF_pct_points", ascending=False).reset_index(drop=True)
+
+# ─── Plot Combined Subplots ────────────────────────────────────────────────
+fig, (ax1, ax2) = plt.subplots(nrows=2, figsize=(14, 10), sharex=False)
+
+# Top plot: Sorted capacity factors
+ax1.plot(cf_vals_old.index, cf_vals_old * 100, label='Baseline Approach 0', color='blue', linewidth=2)
+ax1.plot(cf_vals_a2.index,  cf_vals_a2  * 100, label='Repowering Capacity Maximization (Approach 2)', color='orange', linewidth=2)
+ax1.set_ylabel("Capacity Factor (%)", fontsize=12)
+ax1.set_title("Sorted Capacity Factor Distributions: Baseline vs. Repowering (Approach 2)", fontsize=14)
+ax1.grid(True, linestyle='--', alpha=0.5)
+ax1.legend(fontsize=11)
+
+# Bottom plot: ΔCF per park
+ax2.bar(cf_diff_sorted.index, cf_diff_sorted["ΔCF_pct_points"], color='green', alpha=0.7)
+ax2.axhline(0, color='black', linewidth=1)
+ax2.set_xlabel("Park Index", fontsize=12)
+ax2.set_ylabel("Δ Capacity Factor (percentage points)", fontsize=12)
+ax2.set_title("Difference in Capacity Factor per Park (Approach 2 − Approach 0)", fontsize=14)
+ax2.grid(True, linestyle='--', alpha=0.5)
+
+plt.tight_layout()
+plt.show()

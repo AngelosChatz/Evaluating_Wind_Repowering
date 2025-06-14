@@ -18,7 +18,7 @@ DEFAULT_ELEC_PRICE = 80         # €/MWh
 BASE_DIR    = Path(__file__).resolve().parent
 RESULTS_DIR = BASE_DIR / "results"
 FILE_NEW    = RESULTS_DIR / "Approach_2_Cf.xlsx"
-FILE_OLD    = RESULTS_DIR / "Cf_old_updated.xlsx"
+FILE_OLD    = RESULTS_DIR / "CF_old_updated.xlsx"
 
 # ─── LOAD & RENAME ─────────────────────────────────────────────────────────────
 df_new = (
